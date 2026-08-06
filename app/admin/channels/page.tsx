@@ -44,6 +44,7 @@ export default async function AdminChannelsPage() {
       <header className="flex items-center justify-between border-b-2 border-rule pb-5">
         <Wordmark />
         <nav className="flex items-center gap-5 font-mono text-xs text-muted">
+          <Link href="/admin/keys" className="transition-colors hover:text-accent">Key 管理</Link>
           <Link href="/dashboard" className="transition-colors hover:text-accent">用量</Link>
           <span>m.zmzai.cloud · admin</span>
         </nav>
