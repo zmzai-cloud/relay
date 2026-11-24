@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { UsageRecordedEventSchema, type UsageRecordedEvent, type UsageRecordedPayload } from "@zmzai/contracts";
+import { UsageRecordedEventSchema, type UsageRecordedEvent, type UsageRecordedPayload } from "@/providers/telemetry/contracts";
 
 import { getServerEnv } from "@/config/env";
 
