@@ -3,12 +3,13 @@ import { PageHeader, Terminal } from "@zmzai/theme";
 import { PublicShell } from "@/components/public-shell";
 import { connectMongo } from "@/providers/database/mongodb/connection";
 import { getCurrentUser } from "@/providers/auth/session";
+import { apiUrl } from "@/config/site-origin";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "API 文档 · Relay" };
 
-const BASE = "https://m.zmzai.cloud/v1/chat/completions";
+const BASE = `${apiUrl("/v1/chat/completions")}`;
 
 export default async function PublicDocsPage() {
   const user = await getCurrentUser();
@@ -22,7 +23,7 @@ export default async function PublicDocsPage() {
           title="API 文档"
           description={
             <>
-              Relay 兼容 OpenAI Chat Completions 协议：把 baseURL 指向 <code className="font-mono text-xs">https://m.zmzai.cloud/v1</code>，用 API Key 鉴权即可。zcode、codex 等第三方工具直接使用此地址。模型与价格见 <Link href="/models" className="text-accent underline underline-offset-4">模型列表</Link>。
+              Relay 兼容 OpenAI Chat Completions 协议：把 baseURL 指向 <code className="font-mono text-xs">{apiUrl("/v1")}</code>，用 API Key 鉴权即可。zcode、codex 等第三方工具直接使用此地址。模型与价格见 <Link href="/models" className="text-accent underline underline-offset-4">模型列表</Link>。
             </>
           }
         />

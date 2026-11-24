@@ -8,8 +8,8 @@ import { ChannelAttemptModel } from "@/providers/database/mongodb/models/channel
 import { ChannelModel } from "@/providers/database/mongodb/models/channel";
 import { UsageModel } from "@/providers/database/mongodb/models/usage";
 import { cnyMicrosLabel } from "@/providers/billing/currency";
+import { loginUrl } from "@/config/site-origin";
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.zmzai.cloud";
 const money = (value: number) => cnyMicrosLabel(value);
 const statusVariant = (status: string): "success" | "danger" | "warning" | "outline" => {
   if (status === "completed") return "success";
@@ -34,7 +34,7 @@ const kindLabel: Record<string, string> = {
 export const dynamic = "force-dynamic";
 export default async function ActivityPage() {
   const user = await getCurrentUser();
-  if (!user) redirect(`${AUTH_URL}/login?next=${encodeURIComponent("https://m.zmzai.cloud/admin/activity")}`);
+  if (!user) redirect(loginUrl("/admin/activity"));
   if (user.role !== "admin") redirect("/dashboard");
   await connectMongo();
   const [usages, ledger, uncertain, uncertainSummary] = await Promise.all([

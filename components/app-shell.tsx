@@ -7,9 +7,10 @@ import type { ReactNode } from "react";
 
 import { AppShell as ThemeAppShell, AppShellAccountRow, Button } from "@zmzai/theme";
 import type { AppNavSection, AppPaletteItem } from "@zmzai/theme";
+import { apiUrl, loginUrl, siteHost } from "@/config/site-origin";
 import { LogoutButton } from "@/components/logout-button";
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.zmzai.cloud";
+
 
 const publicSection: AppNavSection = {
   label: "广场",
@@ -93,7 +94,7 @@ export function AppShell({
   }, [isLoggedIn]);
 
   const copyBaseUrl = useCallback(() => {
-    void navigator.clipboard?.writeText("https://m.zmzai.cloud/v1");
+    void navigator.clipboard?.writeText(`${apiUrl("/v1")}`);
   }, []);
 
   const paletteItems = useMemo<AppPaletteItem[]>(() => {
@@ -115,7 +116,7 @@ export function AppShell({
       run: () => router.push(`/models/${encodeURIComponent(name)}`),
     }));
     const actions: AppPaletteItem[] = [
-      { label: "复制 API Base URL", hint: "https://m.zmzai.cloud/v1", group: "动作", icon: "copy", run: copyBaseUrl },
+      { label: "复制 API Base URL", hint: `${apiUrl("/v1")}`, group: "动作", icon: "copy", run: copyBaseUrl },
     ];
     return [...navItems, ...modelItems, ...actions];
   }, [sections, modelNames, router, copyBaseUrl]);
@@ -129,7 +130,7 @@ export function AppShell({
     </AppShellAccountRow>
   ) : (
     <div className="mt-auto border-t border-line px-2 pt-3">
-      <Link href={`${AUTH_URL}/login?next=${encodeURIComponent("https://m.zmzai.cloud/dashboard")}`}>
+      <Link href={loginUrl("/dashboard")}>
         <Button size="sm" className="w-full">登录</Button>
       </Link>
     </div>
@@ -137,7 +138,7 @@ export function AppShell({
 
   return (
     <ThemeAppShell
-      brand={{ label: "Margin", suffix: "· m.zmzai.cloud", href: "/" }}
+      brand={{ label: "Margin", suffix: `· ${siteHost()}`, href: "/" }}
       sections={sections}
       pathname={pathname}
       link={Link}

@@ -7,13 +7,13 @@ import { BalanceAccountModel } from "@/providers/database/mongodb/models/balance
 import { ApiKeyModel } from "@/providers/database/mongodb/models/apikey";
 import { UserModel } from "@zmzai/db";
 import { cnyMicrosLabel } from "@/providers/billing/currency";
+import { loginUrl } from "@/config/site-origin";
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.zmzai.cloud";
 const money = (value: number) => cnyMicrosLabel(value);
 export const dynamic = "force-dynamic";
 export default async function UsersPage() {
   const user = await getCurrentUser();
-  if (!user) redirect(`${AUTH_URL}/login?next=${encodeURIComponent("https://m.zmzai.cloud/admin/users")}`);
+  if (!user) redirect(loginUrl("/admin/users"));
   if (user.role !== "admin") redirect("/dashboard");
   await connectMongo();
   const [users, accounts, keys] = await Promise.all([UserModel.find().sort({ createdAt: -1 }).lean(), BalanceAccountModel.find().lean(), ApiKeyModel.find().lean()]);

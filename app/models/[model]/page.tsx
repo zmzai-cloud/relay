@@ -5,6 +5,7 @@ import { PublicShell } from "@/components/public-shell";
 import { getPublicChannels, moneyMicros } from "@/providers/catalog/public-models";
 import { connectMongo } from "@/providers/database/mongodb/connection";
 import { getCurrentUser } from "@/providers/auth/session";
+import { apiUrl } from "@/config/site-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export default async function ModelDetailPage({ params }: { params: Promise<{ mo
   const found = matches.find((item) => item.model.available) ?? matches[0];
   if (!found) notFound();
   const { model, channel } = found;
-  const example = `curl -N https://m.zmzai.cloud/api/v1/chat/completions \\
+  const example = `curl -N ${apiUrl("/api/v1/chat/completions")} \\
   -H "Authorization: Bearer <YOUR_API_KEY>" \\
   -H "Content-Type: application/json" \\
   -d '{"model":"${model.model}","stream":true,"messages":[{"role":"user","content":"你好"}]}'`;

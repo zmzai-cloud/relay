@@ -7,8 +7,8 @@ import { connectMongo } from "@/providers/database/mongodb/connection";
 import { ChannelModel } from "@/providers/database/mongodb/models/channel";
 import { UsageModel } from "@/providers/database/mongodb/models/usage";
 import { cnyMicrosLabel } from "@/providers/billing/currency";
+import { loginUrl } from "@/config/site-origin";
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.zmzai.cloud";
 const money = (value: number) => cnyMicrosLabel(value);
 
 interface AggRow {
@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ProfitPage({ searchParams }: { searchParams: Promise<{ days?: string }> }) {
   const user = await getCurrentUser();
-  if (!user) redirect(`${AUTH_URL}/login?next=${encodeURIComponent("https://m.zmzai.cloud/admin/profit")}`);
+  if (!user) redirect(loginUrl("/admin/profit"));
   if (user.role !== "admin") redirect("/dashboard");
   const sp = await searchParams;
   const days = sp.days === "30" ? 30 : 7;

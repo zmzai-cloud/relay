@@ -13,13 +13,13 @@ import { ModelHealthModel } from "@/providers/database/mongodb/models/model-heal
 import { ModelHealthStatus } from "./model-health-status";
 import { ModelProbeModel } from "@/providers/database/mongodb/models/model-probe";
 import { probeFingerprint } from "@/providers/catalog/model-probe";
+import { loginUrl } from "@/config/site-origin";
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.zmzai.cloud";
 const money = (value: number) => cnyMicrosLabel(value * 1000); // 价目表按元/1M 展示
 export const dynamic = "force-dynamic";
 export default async function ModelsPage() {
   const user = await getCurrentUser();
-  if (!user) redirect(`${AUTH_URL}/login?next=${encodeURIComponent("https://m.zmzai.cloud/admin/models")}`);
+  if (!user) redirect(loginUrl("/admin/models"));
   if (user.role !== "admin") redirect("/dashboard");
   await connectMongo();
   const [models, channels, probes, health] = await Promise.all([ModelPriceModel.find().sort({ model: 1 }).lean(), ChannelModel.find().select("+apiKey").sort({ priority: 1 }).lean(), ModelProbeModel.find().select("+fingerprint").lean(), ModelHealthModel.find().select("+fingerprint").lean()]);
