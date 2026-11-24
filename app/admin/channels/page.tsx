@@ -7,18 +7,18 @@ import { connectMongo } from "@/providers/database/mongodb/connection";
 import { ChannelModel } from "@/providers/database/mongodb/models/channel";
 
 import { ChannelAdminPanel } from "./channel-admin-panel";
+import { loginUrl } from "@/config/site-origin";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "渠道与路由 · Relay admin" };
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.zmzai.cloud";
 
 export default async function AdminChannelsPage() {
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect(`${AUTH_URL}/login?next=${encodeURIComponent("https://m.zmzai.cloud/admin/channels")}`);
+    redirect(loginUrl("/admin/channels"));
   }
   if (user.role !== "admin") {
     redirect("/dashboard");

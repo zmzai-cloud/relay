@@ -10,6 +10,7 @@ import {
   DialogDescription,
   DialogClose,
 } from "@zmzai/theme";
+import { apiUrl } from "@/config/site-origin";
 import { cnyYuanToMicros } from "@/providers/billing/currency";
 
 interface Key {
@@ -265,7 +266,7 @@ function CreateKeyDialog({
             查看调用示例
           </summary>
           <pre className="mt-3 overflow-x-auto rounded-lg bg-dark-bg p-4 font-mono text-xs leading-relaxed text-dark-ink">
-{`curl https://m.zmzai.cloud/api/v1/chat/completions \\
+{`curl ${apiUrl("/api/v1/chat/completions")} \\
   -H "Authorization: Bearer ${newKey}" \\
   -H "Content-Type: application/json" \\
   -d '{"model":"YOUR_MODEL_ID","messages":[{"role":"user","content":"你好"}]}'`}

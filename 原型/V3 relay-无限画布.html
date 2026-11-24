@@ -1,0 +1,1734 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-zcode-design>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relay · 自托管 LLM API 中转 · 无限画布 V3</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #111110;
+    --bg-subtle: #191918;
+    --surface: #1e1e1d;
+    --surface-raised: #252524;
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.12);
+    --accent: #c89b6c;
+    --accent-dim: rgba(200,155,108,0.15);
+    --text: #e8e6e3;
+    --text-secondary: rgba(232,230,227,0.6);
+    --text-tertiary: rgba(232,230,227,0.32);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.25);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.45), 0 4px 12px rgba(0,0,0,0.3);
+    --shadow-drag: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1.5px var(--accent);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 20px;
+    --font-sans: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-mono: "SF Mono", "Fira Code", "JetBrains Mono", "Cascadia Code", monospace;
+    --note-bg: #2a2520;
+    --note-border: rgba(200,155,108,0.2);
+    --transition-fast: 120ms cubic-bezier(0.25, 0.1, 0.25, 1);
+    --transition-normal: 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    font-family: var(--font-sans);
+    color: var(--text);
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* grain overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 512px 512px;
+    mix-blend-mode: overlay;
+  }
+
+  /* ===== canvas viewport ===== */
+  .canvas-viewport {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    cursor: grab;
+  }
+  .canvas-viewport.panning { cursor: grabbing; }
+
+  #relay-css{} .canvas-world {
+    position: absolute;
+    left: 0; top: 0;
+    width: 20000px; height: 20000px;
+    transform-origin: 0 0;
+    will-change: transform;
+  }
+
+  /* ===== dot grid ===== */
+  .canvas-viewport {
+    --grid-color: rgba(255,255,255,0.04);
+  }
+
+  /* ===== draggable elements ===== */
+  .canvas-el {
+    position: absolute;
+    cursor: grab;
+    transition: box-shadow var(--transition-normal), transform var(--transition-fast);
+  }
+  .canvas-el:hover { z-index: 10; }
+  .canvas-el.dragging {
+    cursor: grabbing;
+    z-index: 999;
+    box-shadow: var(--shadow-drag) !important;
+    transform: scale(1.01);
+    transition: none;
+  }
+
+  /* ===== section header ===== */
+  .section-header {
+    position: absolute;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    white-space: nowrap;
+  }
+  .section-header .section-num {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    opacity: 0.8;
+  }
+  .section-header .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+  }
+  .section-header .section-line {
+    flex: none;
+    width: 48px;
+    height: 1px;
+    background: linear-gradient(90deg, var(--accent) 0%, transparent 100%);
+    opacity: 0.3;
+  }
+
+  /* ===== title ===== */
+  .canvas-title {
+    position: absolute;
+    pointer-events: none;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.025em;
+    color: var(--text);
+  }
+
+  /* ===== text block ===== */
+  .canvas-text {
+    position: absolute;
+    line-height: 1.7;
+    letter-spacing: 0.005em;
+    color: var(--text-secondary);
+    min-width: 200px;
+    max-width: 560px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* ===== tag ===== */
+  .canvas-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--text-secondary);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+    white-space: nowrap;
+  }
+  .canvas-tag:hover {
+    border-color: var(--border-hover);
+    background: var(--surface-raised);
+  }
+  .canvas-tag .tag-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+
+  /* ===== context card ===== */
+  .context-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    min-width: 220px;
+    transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+  }
+  .context-card:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+  }
+  .context-card .card-head {
+    padding: 16px 20px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .context-card .card-head .head-indicator {
+    width: 3px;
+    height: 16px;
+    border-radius: 2px;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+  .context-card .card-head h3 {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--text);
+  }
+  .context-card .card-content {
+    padding: 0 20px 20px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+  }
+  .context-card .card-content ul {
+    list-style: none;
+    padding: 0;
+  }
+  .context-card .card-content li {
+    padding: 4px 0;
+    padding-left: 12px;
+    position: relative;
+  }
+  .context-card .card-content li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 11px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--text-tertiary);
+  }
+
+  /* ===== design system card ===== */
+  .ds-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+  }
+  .ds-card:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+  }
+  .ds-card .ds-head {
+    padding: 16px 20px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+  }
+  .ds-card .ds-body {
+    padding: 0 20px 20px;
+  }
+
+  /* color type */
+  .ds-card .color-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+    gap: 8px;
+  }
+  .ds-card .color-chip {
+    aspect-ratio: 1;
+    border-radius: var(--radius-sm);
+    position: relative;
+    transition: transform var(--transition-fast);
+  }
+  .ds-card .color-chip:hover { transform: scale(1.08); }
+  .ds-card .color-chip .chip-label {
+    position: absolute;
+    bottom: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+  }
+
+  /* typography type */
+  .ds-card .type-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .ds-card .type-row {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+  .ds-card .type-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-tertiary);
+    min-width: 36px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .ds-card .type-sample {
+    color: var(--text);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ===== color swatch (standalone) ===== */
+  .color-swatch-group {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 20px;
+  }
+  .swatch-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .swatch-circle {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,0.08);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  }
+  .swatch-circle:hover {
+    transform: scale(1.1);
+    box-shadow: var(--shadow-md);
+  }
+  .swatch-name {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+  .swatch-hex {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-tertiary);
+    text-align: center;
+  }
+
+  /* ===== type sample (standalone) ===== */
+  .type-sample-group {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 400px;
+  }
+  .type-sample-row {
+    display: flex;
+    align-items: baseline;
+    gap: 20px;
+  }
+  .type-sample-meta {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-tertiary);
+    min-width: 48px;
+    flex-shrink: 0;
+    letter-spacing: 0.04em;
+  }
+  .type-sample-text {
+    color: var(--text);
+    line-height: 1.25;
+  }
+
+  /* ===== note (sticky) ===== */
+  .canvas-note {
+    background: var(--note-bg);
+    border: 1px solid var(--note-border);
+    border-radius: var(--radius-md);
+    padding: 16px 18px;
+    min-width: 200px;
+    max-width: 300px;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow var(--transition-normal), transform var(--transition-fast);
+  }
+  .canvas-note:hover {
+    box-shadow: var(--shadow-md);
+  }
+  .canvas-note .note-tag {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    opacity: 0.7;
+    margin-bottom: 8px;
+  }
+  .canvas-note .note-body {
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+  }
+
+  /* ===== design page ===== */
+  .design-page {
+    background: #fff;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    transition: box-shadow var(--transition-normal);
+  }
+  .design-page:hover {
+    box-shadow: 0 16px 56px rgba(0,0,0,0.5), 0 6px 16px rgba(0,0,0,0.35);
+  }
+  .design-page .page-content {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+  .page-label {
+    position: absolute;
+    bottom: -32px;
+    left: 0;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .page-label .label-num {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent);
+    opacity: 0.6;
+  }
+
+  /* ===== diagram ===== */
+  .canvas-diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+  .canvas-diagram .diagram-content {
+    width: 100%;
+    height: 100%;
+    padding: 20px;
+  }
+
+  /* ===== zoom controls ===== */
+  .zoom-controls {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    z-index: 100;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+  }
+  .zoom-btn {
+    width: 36px; height: 36px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background var(--transition-fast), color var(--transition-fast);
+  }
+  .zoom-btn:hover {
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+  }
+  .zoom-btn:active {
+    background: rgba(255,255,255,0.03);
+  }
+  .zoom-label {
+    min-width: 50px; height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-tertiary);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+
+  /* ===== coord indicator ===== */
+  .coord-indicator {
+    position: fixed;
+    bottom: 28px; left: 24px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    color: var(--text-tertiary);
+    z-index: 100;
+    padding: 4px 10px;
+    background: rgba(17,17,16,0.85);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* ===== keyboard hint ===== */
+  .kbd-hint {
+    position: fixed;
+    top: 20px; right: 24px;
+    z-index: 100;
+    font-size: 10px;
+    color: var(--text-tertiary);
+    display: flex;
+    gap: 12px;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+  }
+  .canvas-viewport:hover ~ .kbd-hint { opacity: 1; }
+  .kbd-hint kbd {
+    font-family: var(--font-mono);
+    padding: 2px 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 10px;
+  }
+/* ══ relay 页面样式（scoped .rp）══ */
+.rp { width: 100%; height: 100%; overflow: hidden; display: flex; flex-direction: column; }
+
+/*
+   Relay 中转驿 重设计 — 「工程台账」方向
+   tokens 全部取自 @zmzai/theme v0.9（纯白 + 墨黑结构 + 品红点睛）
+   纪律：spot 品红只出现在深色载体上；spot-strong 每屏最多一次；
+   语义色只讲好坏；1px 硬规则线（rule）做区块骨架。
+   ════════════════════════════════════════════════════════════════ */
+.rp {
+  /* 结构色 */
+  --bg:           oklch(1 0 0);
+  --surface:      oklch(0.985 0.001 265);
+  --surface-2:    oklch(0.968 0.002 265);
+  --surface-3:    oklch(0.94 0.003 265);
+  --ink:          oklch(0.21 0.008 265);
+  --ink-2:        oklch(0.442 0.017 265);
+  --ink-3:        oklch(0.617 0.014 265);
+  --line:         oklch(0.92 0.004 265);
+  --line-strong:  oklch(0.87 0.005 265);
+  --rule:         oklch(0.21 0.008 265);
+  --accent:       oklch(0.21 0.008 265);
+  --accent-ink:   oklch(1 0 0);
+  --accent-strong:oklch(0.09 0.004 265);
+  /* 语义色 */
+  --success:      oklch(0.499 0.13 145);
+  --success-tint: oklch(0.955 0.035 145);
+  --live:         oklch(0.499 0.17 145);
+  --live-tint:    oklch(0.955 0.045 145);
+  --warning:      oklch(0.499 0.12 75);
+  --warning-tint: oklch(0.955 0.045 90);
+  --danger:       oklch(0.499 0.18 25);
+  --danger-tint:  oklch(0.955 0.03 25);
+  /* 品红点睛 — 仅深色载体 */
+  --spot-strong:  oklch(0.659 0.275 350);
+  --spot:         oklch(0.7 0.26 350);
+  --spot-soft:    oklch(0.78 0.15 350);
+  --spot-deep:    oklch(0.56 0.2 350);
+  /* 深色载体 — 终端面板 */
+  --dark-bg:      oklch(0.17 0.006 265);
+  --dark-surface: oklch(0.23 0.007 265);
+  --dark-ink:     oklch(0.97 0.002 265);
+  --dark-line:    oklch(0.32 0.008 265);
+  --dark-muted:   oklch(0.72 0.005 265);
+  /* 阴影 / 圆角 / 动效 */
+  --shadow-md: 0 4px 12px -2px oklch(0.21 0.008 265 / .08), 0 2px 4px -2px oklch(0.21 0.008 265 / .05);
+  --shadow-lg: 0 12px 32px -8px oklch(0.21 0.008 265 / .12), 0 4px 8px -4px oklch(0.21 0.008 265 / .06);
+  --r-xs: 2px; --r-sm: 3px; --r: 4px; --r-lg: 6px; --r-xl: 8px; --r-pill: 9999px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* 字体 — 与 @zmzai/theme 完全同链；原型不外联字体 */
+  --font-sans: "MiSans", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { scroll-behavior: smooth; }
+.rp {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-sans); font-size: 15px; line-height: 1.6;
+  text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased;
+}
+.rp a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+input, select { font: inherit; }
+.rp ul, ol { margin: 0; padding: 0; list-style: none; }
+.rp h1, h2, h3, p { margin: 0; }
+svg { display: block; }
+
+.rp :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+
+/* ── 排版基线 ─────────────────────────────────────────────── */
+.display {
+  font-size: clamp(34px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.02em; font-weight: 600;
+}
+.h1 { font-size: 28px; line-height: 1.2; letter-spacing: -0.01em; font-weight: 600; }
+.h2 { font-size: 20px; line-height: 1.3; letter-spacing: -0.005em; font-weight: 600; }
+.h3 { font-size: 16px; line-height: 1.4; font-weight: 600; }
+.small { font-size: 13px; line-height: 1.55; }
+.caption { font-size: 12px; line-height: 1.5; letter-spacing: 0.01em; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.eyebrow {
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ink-2);
+}
+.t-muted { color: var(--ink-2); }
+.t-aux { color: var(--ink-3); }
+code.inline {
+  font-family: var(--font-mono); font-size: 12px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--r-xs); padding: 1px 5px; white-space: nowrap;
+}
+
+/* ── 布局壳 ───────────────────────────────────────────────── */
+#app { min-height: 100dvh; display: flex; flex-direction: column; }
+.shell { display: flex; flex: 1; min-height: 0; }
+#app[data-mode="console"] .topnav, #app[data-mode="console"] #sitefoot { display: none; }
+#app[data-mode="public"] .sidebar { display: none; }
+
+/* 公开区顶栏 */
+.topnav {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 28px;
+  height: 60px; padding: 0 28px;
+  background: oklch(1 0 0 / .92); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.topnav .brand { display: flex; align-items: center; gap: 10px; margin-right: 8px; }
+.topnav .brand .name { font-weight: 600; letter-spacing: -0.01em; }
+.topnav .brand .name .sub { color: var(--ink-2); font-weight: 400; font-size: 12px; margin-left: 6px; }
+.topnav nav { display: flex; gap: 4px; }
+.topnav nav a {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 34px; padding: 0 12px; border-radius: var(--r-sm);
+  font-size: 14px; color: var(--ink-2); transition: color .15s var(--ease-out), background .15s var(--ease-out);
+}
+.topnav nav a:hover { color: var(--ink); background: var(--surface); }
+.topnav nav a[aria-current="page"] { color: var(--ink); background: var(--surface-2); }
+.topnav .spacer { flex: 1; }
+.topnav .meta { display: flex; align-items: center; gap: 14px; }
+
+/* 控制台侧栏 */
+.sidebar {
+  width: 236px; flex-shrink: 0; position: sticky; top: 0; height: 100dvh;
+  display: flex; flex-direction: column;
+  border-right: 1px solid var(--line); background: var(--bg);
+}
+.sidebar .brand { display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 24px; border-bottom: 1px solid var(--line); }
+.sidebar .brand .name { font-weight: 600; }
+.sidebar nav { padding: 14px 12px 14px 24px; flex: 1; overflow-y: auto; }
+.navgroup { margin-bottom: 18px; }
+.navgroup > .eyebrow { display: block; padding: 0 10px; margin-bottom: 6px; }
+.navitem {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  height: 34px; padding: 0 10px; border-radius: var(--r-sm);
+  font-size: 14px; color: var(--ink-2); text-align: left;
+  transition: color .15s var(--ease-out), background .15s var(--ease-out);
+}
+.navitem:hover { color: var(--ink); background: var(--surface); }
+.navitem[aria-current="page"] { color: var(--ink); background: var(--surface-2); font-weight: 500; }
+.navitem svg { flex-shrink: 0; opacity: .75; }
+.navitem[aria-current="page"] svg { opacity: 1; }
+.sidebar .account {
+  border-top: 1px solid var(--line); padding: 14px 16px;
+  display: flex; align-items: center; gap: 10px;
+}
+.sidebar .account .who { flex: 1; min-width: 0; }
+.sidebar .account .who .nm { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar .account .who .bal { font-size: 12px; color: var(--ink-2); margin-top: 1px; }
+.sidebar .account .who .bal .num { color: var(--ink); }
+.avatar {
+  width: 30px; height: 30px; border-radius: var(--r-pill); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ink); color: var(--accent-ink);
+  font-size: 12px; font-weight: 600; letter-spacing: 0;
+}
+
+/* 主区 */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.content { width: min(100% - 56px, 1120px); margin-inline: auto; padding: 34px 0 80px; }
+.content.wide { width: min(100% - 56px, 1320px); }
+
+/* 页头（台账式：标题 + 硬规则线 + 页头行右侧动作） */
+.pagehead { border-bottom: 1px solid var(--rule); padding-bottom: 18px; margin-bottom: 26px; }
+.pagehead .row { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px 20px; flex-wrap: wrap; }
+.pagehead .desc { margin-top: 8px; max-width: 62ch; color: var(--ink-2); font-size: 14px; }
+.pagehead .actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; }
+
+/* ── 组件 ─────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  height: 36px; padding: 0 16px; border-radius: var(--r-sm);
+  font-size: 14px; font-weight: 500; letter-spacing: 0.02em;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+  transition: background .15s var(--ease-out), transform .1s var(--ease-out);
+}
+.btn:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .45; cursor: default; pointer-events: none; }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line-strong); }
+.btn.ghost:hover { background: var(--surface); border-color: var(--ink-3); }
+.btn.sm { height: 30px; padding: 0 12px; font-size: 13px; }
+.btn.danger-ghost { background: transparent; border-color: transparent; color: var(--danger); }
+.btn.danger-ghost:hover { background: var(--danger-tint); border-color: oklch(0.499 0.18 25 / .25); }
+.btn.on-dark { background: var(--spot-strong); border-color: var(--spot-strong); color: oklch(0.13 0.01 265); }
+.btn.on-dark:hover { background: var(--spot); border-color: var(--spot); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 21px; padding: 0 8px; border-radius: var(--r-xs);
+  font-size: 12px; font-weight: 500; letter-spacing: 0.01em; white-space: nowrap;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink-2);
+}
+.badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.badge.success { color: var(--success); background: var(--success-tint); border-color: oklch(0.499 0.13 145 / .2); }
+.badge.warning { color: var(--warning); background: var(--warning-tint); border-color: oklch(0.499 0.12 75 / .2); }
+.badge.danger  { color: var(--danger);  background: var(--danger-tint);  border-color: oklch(0.499 0.18 25 / .2); }
+.badge.live    { color: var(--live);    background: var(--live-tint);    border-color: oklch(0.499 0.17 145 / .2); }
+
+.card { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-lg); }
+.card.pad { padding: 20px; }
+
+/* 台账表格 */
+.ledger-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ledger-table th {
+  text-align: left; font-weight: 400; font-family: var(--font-mono); font-size: 12px;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2);
+  padding: 9px 14px; border-bottom: 1px solid var(--rule); white-space: nowrap;
+}
+.ledger-table td { padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.ledger-table tbody tr:last-child td { border-bottom: 0; }
+.ledger-table tbody tr { transition: background .12s var(--ease-out); }
+.ledger-table tbody tr:hover { background: var(--surface); }
+.ledger-table .r { text-align: right; }
+.ledger-table th.r { text-align: right; }
+.ledger-table td.num, .ledger-table td .num { font-size: 13px; }
+
+/* 终端面板（深色载体 — spot 唯一舞台） */
+.terminal {
+  background: var(--dark-bg); color: var(--dark-ink);
+  border-radius: var(--r-lg); overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+.terminal .bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-bottom: 1px solid var(--dark-line);
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em;
+  color: var(--dark-muted); text-transform: uppercase;
+}
+.terminal .bar .sig { display: flex; gap: 6px; }
+.terminal .bar .sig i { width: 9px; height: 9px; border-radius: 50%; background: var(--dark-line); }
+.terminal pre {
+  margin: 0; padding: 18px 20px; overflow-x: auto;
+  font-family: var(--font-mono); font-size: 14px; line-height: 1.75;
+  font-variant-numeric: tabular-nums; color: var(--dark-ink);
+}
+.terminal pre .cm { color: var(--dark-muted); }       /* 注释/弱化 */
+.terminal pre .sp { color: var(--spot); }             /* 品红 — 关键值 */
+.terminal pre .ss { color: var(--spot-strong); font-weight: 700; } /* 满彩点睛 每屏一次 */
+.terminal pre .ok { color: oklch(0.78 0.12 145); }
+
+/* 筛选 chips */
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 29px; padding: 0 12px;
+  border-radius: var(--r-pill); border: 1px solid var(--line);
+  font-size: 13px; color: var(--ink-2); background: var(--bg);
+  transition: color .15s var(--ease-out), background-color .15s var(--ease-out), border-color .15s var(--ease-out);
+}
+.chip:hover { border-color: var(--line-strong); color: var(--ink); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--accent-ink); border-color: var(--ink); }
+.chip .n { font-family: var(--font-mono); font-size: 12px; opacity: .8; }
+
+/* 搜索框 */
+.search {
+  display: flex; align-items: center; gap: 8px; height: 36px;
+  padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--bg); transition: border-color .15s var(--ease-out);
+  min-width: clamp(140px, 40vw, 220px);
+}
+.search:focus-within { border-color: var(--accent); }
+.search input { border: 0; outline: none; background: transparent; width: 100%; font-size: 14px; color: var(--ink); }
+.search input::placeholder { color: var(--ink-2); }
+.search .count { font-family: var(--font-mono); font-size: 11px; color: var(--ink-2); }
+
+/* 输入 */
+.field { display: block; }
+.field > .lb { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+.field > .lb .opt { color: var(--ink-2); font-weight: 400; font-size: 12px; }
+.input {
+  width: 100%; height: 36px; padding: 0 12px;
+  border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+  background: var(--bg); font-size: 14px; color: var(--ink);
+  transition: border-color .15s var(--ease-out);
+}
+.input:focus { outline: none; border-color: var(--accent); }
+.input.mono { font-family: var(--font-mono); font-size: 13px; }
+.hint { font-size: 12px; color: var(--ink-2); margin-top: 5px; }
+
+
+#toasts { position: fixed; bottom: 24px; right: 24px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--ink); color: var(--accent-ink);
+  border-radius: var(--r); padding: 10px 14px; font-size: 13px;
+  box-shadow: var(--shadow-lg);
+  animation: toast-in .28s var(--ease-spring);
+}
+.toast svg { flex-shrink: 0; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(10px); } }
+
+/* KPI 行（概览） */
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; background: var(--bg); }
+.kpi { padding: 18px 20px; border-left: 1px solid var(--line); }
+.kpi:first-child { border-left: 0; }
+.kpi .lb { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); font-family: var(--font-mono); }
+.kpi .v { margin-top: 8px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 30px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
+.kpi .s { margin-top: 6px; font-size: 12px; color: var(--ink-2); }
+
+/* 区块标题（硬规则线骨架） */
+.sect { margin-top: 40px; }
+.sect > .secthead {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+  border-bottom: 1px solid var(--rule); padding-bottom: 10px; margin-bottom: 0;
+}
+.sect > .secthead h2 { font-size: 16px; font-weight: 600; letter-spacing: 0.01em; }
+.sect > .secthead .more { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); display: inline-block; padding: 6px 2px; margin: -6px -2px; }
+.sect > .secthead .more:hover { color: var(--ink); }
+
+/* 分页 */
+.pager { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; font-size: 13px; color: var(--ink-2); }
+.pager .pages { display: flex; gap: 4px; }
+.pager button.pg {
+  min-width: 30px; height: 30px; padding: 0 8px; border-radius: var(--r-sm);
+  border: 1px solid transparent; font-family: var(--font-mono); font-size: 13px; color: var(--ink-2);
+}
+.pager button.pg:hover:not(:disabled) { border-color: var(--line-strong); color: var(--ink); }
+.pager button.pg[aria-current="true"] { background: var(--ink); color: var(--accent-ink); }
+.pager button.pg:disabled { opacity: .35; cursor: default; }
+
+/* 屏幕切换 */
+
+
+
+
+/* 演示数据标签 */
+.demo-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em;
+  color: var(--ink-2); border: 1px dashed var(--line-strong);
+  border-radius: var(--r-xs); padding: 2px 7px; text-transform: uppercase;
+}
+/* ── 首页 hero ────────────────────────────────────────────── */
+.hero { display: grid; grid-template-columns: minmax(0, 10fr) minmax(0, 9fr); gap: 48px; align-items: center; padding-top: 56px; }
+.hero .eyebrow-row { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.hero .eyebrow-row .sep { width: 28px; height: 1px; background: var(--rule); }
+.hero .desc { margin-top: 16px; font-size: 15.5px; line-height: 1.75; color: var(--ink-2); max-width: 46ch; }
+.hero .cta { display: flex; align-items: center; gap: 16px; margin-top: 28px; }
+.hero .cta .ghostlink { font-size: 14px; color: var(--ink); border-bottom: 1px solid var(--line-strong); padding-bottom: 1px; }
+.hero .cta .ghostlink:hover { border-color: var(--ink); }
+.hero .facts { display: flex; gap: 0; margin-top: 34px; border-top: 1px solid var(--rule); }
+.hero .facts .f { padding: 14px 26px 0 0; margin-right: 26px; border-right: 1px solid var(--line); }
+.hero .facts .f:last-child { border-right: 0; margin-right: 0; }
+.hero .facts .v { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
+.hero .facts .k { font-size: 12px; color: var(--ink-2); margin-top: 3px; }
+.hero .term { min-width: 0; }
+.hero .term .foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; border-top: 1px solid var(--dark-line);
+  font-family: var(--font-mono); font-size: 12px; color: var(--dark-muted);
+}
+.hero .term .foot .cost b { color: var(--spot); font-weight: 600; }
+
+/* 首页：步骤与路由图 */
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+.steps .st { padding: 22px; border-left: 1px solid var(--line); background: var(--bg); }
+.steps .st:first-child { border-left: 0; }
+.steps .st .no { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+.steps .st .tt { margin-top: 8px; font-size: 15px; font-weight: 600; }
+.steps .st .dd { margin-top: 6px; font-size: 13px; line-height: 1.65; color: var(--ink-2); }
+
+.routemap { display: flex; align-items: stretch; gap: 0; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+.routemap .node { flex: 1; padding: 20px 22px; }
+.routemap .node .nk { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.routemap .node .nv { margin-top: 8px; font-size: 14px; font-weight: 500; }
+.routemap .node .nd { margin-top: 4px; font-size: 12.5px; color: var(--ink-2); }
+.routemap .node.dark .nd { color: oklch(0.75 0.005 265); }
+.routemap .node.dark { background: var(--dark-bg); color: var(--dark-ink); flex: 0.9; }
+.routemap .node.dark .nk { color: var(--dark-muted); }
+.routemap .arrow { display: flex; align-items: center; padding: 0 10px; color: var(--ink-3); border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+
+/* 文档两栏 */
+.docs-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 48px; align-items: start; }
+.docs-layout > * { min-width: 0; }
+.docs-toc { position: sticky; top: 92px; }
+.docs-toc a {
+  display: block; padding: 6px 0 6px 14px; border-left: 2px solid var(--line);
+  font-size: 13px; color: var(--ink-2); transition: color .15s, border-color .15s;
+}
+.docs-toc a:hover { color: var(--ink); }
+.docs-toc a.active { color: var(--ink); border-left-color: var(--rule); font-weight: 500; }
+.docs-body section { margin-top: 40px; }
+.docs-body section:first-child { margin-top: 0; }
+.docs-body h2 { font-size: 17px; font-weight: 600; display: flex; gap: 10px; align-items: baseline; }
+.docs-body h2 .n { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+.docs-body p { margin-top: 10px; font-size: 14px; line-height: 1.8; color: var(--ink-2); max-width: 68ch; }
+.docs-body .margin-note {
+  margin-top: 14px; padding: 12px 16px; background: var(--surface);
+  border-left: 2px solid var(--rule); font-size: 13px; line-height: 1.7; color: var(--ink-2);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0; max-width: 68ch;
+}
+
+/* 概览 sparkline */
+.spark-wrap { display: flex; gap: 20px; align-items: stretch; }
+.spark-legend { display: flex; gap: 18px; margin-top: 10px; font-size: 12px; color: var(--ink-2); }
+#spark-xlabels { display: flex; justify-content: space-between; margin-top: 8px; padding: 0 1.6%; font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+#spark-xlabels span:first-child { text-align: left; }
+#spark-xlabels span:last-child { text-align: right; }
+.spark-legend i { display: inline-block; width: 10px; height: 2px; background: var(--ink); margin-right: 6px; vertical-align: middle; }
+
+/* key 行 */
+.keyrow { display: flex; align-items: center; gap: 12px 20px; padding: 16px 20px; border-bottom: 1px solid var(--line); transition: opacity .2s; flex-wrap: wrap; row-gap: 14px; }
+.keyrow:last-child { border-bottom: 0; }
+.keyrow.revoked { opacity: .55; }
+.keyrow .id { flex: 1 1 240px; min-width: 0; }
+.keyrow .id .nm { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.keyrow .id .prefix { margin-top: 5px; }
+.keyrow .stats { display: flex; gap: 14px 28px; text-align: right; flex-wrap: wrap; margin-left: auto; }
+.keyrow .stats .cell .v { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13.5px; font-weight: 500; }
+.keyrow .stats .cell .k { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+
+/* 充值 */
+.balance-strip { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px 24px; flex-wrap: wrap; border: 1px solid var(--line); border-radius: var(--r-lg); padding: 24px 26px; }
+.balance-strip .big { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 40px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.05; margin-top: 10px; }
+.packs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.pack { position: relative; text-align: left; border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px; background: var(--bg); transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out); }
+.pack:hover { border-color: var(--line-strong); }
+.pack[aria-pressed="true"] { border-color: var(--ink); box-shadow: var(--shadow-md); }
+.pack .amt { font-family: var(--font-mono); font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
+.pack .per { font-size: 12.5px; color: var(--ink-2); margin-top: 6px; line-height: 1.6; }
+.pack .tick { position: absolute; top: 14px; right: 14px; opacity: 0; transition: opacity .15s; }
+.pack[aria-pressed="true"] .tick { opacity: 1; }
+.reqcode-card { border: 1px solid var(--rule); border-radius: var(--r-lg); padding: 22px 24px; background: var(--bg); }
+.reqcode-card .code {
+  font-family: var(--font-mono); font-size: 24px; letter-spacing: 0.14em; font-weight: 600;
+  margin-top: 10px; user-select: all;
+}
+.reqcode-card .cd { font-variant-numeric: tabular-nums; }
+
+/* 模型详情格 */
+.statgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+.statgrid .cell { background: var(--bg); padding: 16px 18px; }
+.statgrid .cell .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.05em; color: var(--ink-2); text-transform: uppercase; }
+.statgrid .cell .v { margin-top: 7px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 500; }
+
+/* 响应式 */
+@media (max-width: 1180px) {
+  .sidebar { width: 72px; }
+  .sidebar .brand .name, .sidebar .navgroup > .eyebrow, .sidebar .navitem .t, .sidebar .account .who { display: none; }
+  .sidebar .brand { justify-content: center; padding: 0; }
+  .sidebar nav { padding: 14px 0; }
+  .navitem { justify-content: center; padding: 0; width: 36px; height: 36px; margin: 3px auto; }
+  .sidebar .account { flex-direction: column; gap: 8px; padding: 12px 8px; }
+  .hero { grid-template-columns: 1fr; gap: 36px; padding-top: 36px; }
+  .statgrid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 900px) {
+  .content, .content.wide { width: min(100% - 48px, 1120px); }
+  .kpis { grid-template-columns: 1fr; }
+  .kpi { border-left: 0; border-top: 1px solid var(--line); }
+  .kpi:first-child { border-top: 0; }
+  .steps, .packs { grid-template-columns: 1fr; }
+  .steps .st { border-left: 0; border-top: 1px solid var(--line); }
+  .steps .st:first-child { border-top: 0; }
+  .docs-layout { grid-template-columns: 1fr; }
+  .docs-toc { position: static; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .docs-toc a { border-left: 0; padding: 2px 0; }
+  .docs-toc a.active { border-left: 0; }
+  .routemap { flex-direction: column; }
+  .routemap .arrow { transform: rotate(90deg); border: 0; border-top: 1px solid var(--line); justify-content: center; }
+  .topnav { gap: 12px; padding: 0 24px; overflow-x: auto; }
+  .pagehead .actions { width: 100%; }
+  .pagehead .actions .search { flex: 1 1 140px; }
+  .keyrow { flex-wrap: wrap; }
+  .statgrid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── 管理端 ─────────────────────────────────────────── */
+.kpis.c4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 1180px) { .kpis.c4 { grid-template-columns: repeat(2, 1fr); } .kpi:nth-child(3) { border-top: 1px solid var(--line); } .kpi:nth-child(4) { border-top: 1px solid var(--line); } }
+@media (max-width: 900px) { .kpis.c4 { grid-template-columns: 1fr; } .kpi { border-left: 0; } }
+.banner-danger { display: flex; gap: 10px; align-items: flex-start; border: 1px solid oklch(0.499 0.18 25 / .4); background: var(--danger-tint); border-radius: var(--r-lg); padding: 13px 16px; font-size: 14px; }
+.banner-danger b { color: var(--danger); font-weight: 600; }
+.radio-row { display: flex; flex-wrap: wrap; gap: 18px; font-size: 14px; }
+.radio-row label { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.radio-row input { accent-color: var(--ink); width: 15px; height: 15px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+@media (max-width: 1024px) { .two-col { grid-template-columns: 1fr; } }
+.poolcard { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 22px 24px; background: var(--bg); }
+.poolcard .big { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 32px; font-weight: 600; letter-spacing: -0.02em; margin-top: 8px; }
+.poolcard dl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
+.poolcard dt { font-size: 12px; color: var(--ink-2); }
+.poolcard dd { margin: 2px 0 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 14px; }
+.orderrow { padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.orderrow:last-child { border-bottom: 0; }
+.orderrow .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.testline { margin-top: 5px; font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+.profit-pos { color: var(--success); } .profit-neg { color: var(--danger); }
+
+/* ── V3：登录与安装向导 ─────────────────────────────── */
+.auth-wrap { min-height: calc(100dvh - 60px); display: flex; align-items: center; justify-content: center; padding: 40px 24px; }
+.auth-card { width: min(100%, 400px); }
+.auth-card .mark { display: flex; align-items: center; gap: 10px; justify-content: center; margin-bottom: 22px; }
+.auth-card .mark .nm { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.auth-card .hintbox { margin-top: 18px; padding: 12px 14px; border: 1px dashed var(--line-strong); border-radius: var(--r); font-size: 13px; color: var(--ink-2); line-height: 1.7; }
+.wiz { max-width: 640px; }
+.wiz-track { display: flex; gap: 0; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; margin-bottom: 26px; }
+.wiz-step { flex: 1; padding: 12px 14px; border-left: 1px solid var(--line); background: var(--bg); display: flex; align-items: center; gap: 8px; }
+.wiz-step:first-child { border-left: 0; }
+.wiz-step .no { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+.wiz-step .tt { font-size: 13px; color: var(--ink-2); }
+.wiz-step.current { background: var(--surface-2); }
+.wiz-step.current .no, .wiz-step.current .tt { color: var(--ink); font-weight: 500; }
+.wiz-step.done .no { color: var(--success); }
+.wiz-pane { display: none; animation: screen-in .3s var(--ease-out); }
+.wiz-pane.active { display: block; }
+.wiz-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 26px; border-top: 1px solid var(--rule); padding-top: 18px; }
+.wiz-sum { border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+.wiz-sum .row2 { display: flex; justify-content: space-between; gap: 16px; padding: 11px 18px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.wiz-sum .row2:last-child { border-bottom: 0; }
+.wiz-sum .row2 .k { color: var(--ink-2); }
+.swatch-row { display: flex; gap: 12px; margin-top: 10px; }
+.spot-pick { width: 44px; height: 44px; border-radius: var(--r); border: 2px solid transparent; padding: 0; position: relative; transition: border-color .15s var(--ease-out), transform .15s var(--ease-out); }
+.spot-pick:hover { transform: translateY(-2px); }
+.spot-pick[aria-pressed="true"] { border-color: var(--ink); }
+.spot-pick .lb2 { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 7px; font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.spot-field { margin-bottom: 26px; }
+/* SEGMENT-CSS */
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="canvas-viewport" id="viewport">
+  <div class="canvas-world" id="world"></div>
+</div>
+
+<div class="zoom-controls">
+  <button class="zoom-btn" id="zoomOut" aria-label="">&#8722;</button>
+  <div class="zoom-label" id="zoomLabel">100%</div>
+  <button class="zoom-btn" id="zoomIn" aria-label="">+</button>
+  <button class="zoom-btn" id="zoomReset" title="" aria-label="">&#8962;</button>
+</div>
+
+<div class="coord-indicator" id="coordIndicator">0, 0</div>
+
+<div class="kbd-hint" id="kbdHint"></div>
+
+<script>
+(() => {
+  // ═══════════════════════════════════════════════════════════
+  // LOCALIZE: instantiating agent MUST translate every value in
+  // UI_STRINGS to the user's conversation language. Machine fields
+  // (id/class/data-*) remain English.
+  // ═══════════════════════════════════════════════════════════
+  const UI_STRINGS = {
+    projectDescription: 'Infinite canvas design delivery template.\nSupports free layout of titles, text, tags, cards, color swatches, type samples, design pages, and notes.',
+    tags: ['Infinite Canvas', 'Design Delivery', 'Three-Layer Architecture'],
+    contextCards: {
+      coreFeatures: { title: 'Core Features', items: ['Pan & zoom canvas', 'Drag elements freely', 'Undo layout changes', 'Trackpad gesture support'] },
+      techHighlights: { title: 'Technical Highlights', items: ['Single-file HTML delivery', 'No external dependencies', 'Open directly in browser', 'Pointer Events touch compatibility'] },
+      deliveryStandards: { title: 'Delivery Standards', items: ['Row 1 answers three core questions', 'Row 2 shows color & type system', 'Row 3 pages arranged by flow'] },
+    },
+    notes: {
+      designPhilosophy: { tag: 'Design Philosophy', body: 'Pursue a design-board feel, not a table. Elements scatter freely; important things are bigger and more prominent.' },
+      remark: { tag: 'Remark', body: 'This is the template demo scene. When used, the agent fills in project content.' },
+    },
+    typeSamples: {
+      heading: 'Heading',
+      subheading: 'Subheading',
+      bodyText: 'Body text. Design is the process of turning intent into perceivable form.',
+      caption: 'Caption / supplementary text',
+    },
+    pages: {
+      home: { label: 'Home', heading: 'Welcome to the Infinite Canvas', cta: 'Start Exploring' },
+      discover: { label: 'Discover', todayPick: 'Today\'s Picks' },
+      cards: {
+        designSystemIntro: { title: 'Design System Basics', desc: 'Build a complete design language from scratch' },
+        colorTheory: { title: 'Color Theory', desc: 'Understanding oklch and harmonious palettes' },
+        typographyRhythm: { title: 'Typography Rhythm', desc: 'Line height, letter spacing, and breathing room' },
+      },
+      profile: { label: 'Profile', name: 'Designer', role: 'Product Design \u00b7 3 Projects', items: ['My Projects', 'Design Specs', 'Settings'] },
+    },
+    docTitle: 'Relay 中转驿 · 无限画布',
+    zoom: { zoomIn: '放大', zoomOut: '缩小', reset: '重置视图' },
+    kbdHints: [['滚动', '平移'], ['\u2318滚动', '缩放'], ['\u2318Z', '撤销']],
+    sections: { context: '01 PROJECT CONTEXT', designSystem: '02 DESIGN SYSTEM', deliverables: '03 DESIGN DELIVERABLES' },
+    demoTitle: 'Canvas Template',
+    designSystemCards: {
+      colorTitle: 'Color Palette',
+      typographyTitle: 'Typography',
+      componentsTitle: 'Components',
+      swatchNames: ['Accent', 'Surface', 'Raised', 'Text', 'Muted', 'Border'],
+      typeMeta: { h1: 'H1', h2: 'H2', body: 'Body', caption: 'Caption' },
+      componentSamples: { primary: 'Primary Button', secondary: 'Secondary', inputPlaceholder: 'Input placeholder\u2026' },
+    },
+    hello: 'Hello',
+  };
+
+  // Chrome strings live in UI_STRINGS too — applied here so the static HTML
+  // above carries no visible copy at all (machine-checkable invariant).
+  document.title = UI_STRINGS.docTitle;
+  document.getElementById('zoomIn').setAttribute('aria-label', UI_STRINGS.zoom.zoomIn);
+  document.getElementById('zoomOut').setAttribute('aria-label', UI_STRINGS.zoom.zoomOut);
+  document.getElementById('zoomReset').setAttribute('aria-label', UI_STRINGS.zoom.reset);
+  document.getElementById('kbdHint').innerHTML = UI_STRINGS.kbdHints
+    .map(([keys, action]) => `<span><kbd>${keys}</kbd> ${action}</span>`)
+    .join('');
+
+  const viewport = document.getElementById('viewport');
+  const world = document.getElementById('world');
+  const zoomLabel = document.getElementById('zoomLabel');
+  const coordIndicator = document.getElementById('coordIndicator');
+
+  /* ===== canvas state ===== */
+  let panX = 0, panY = 0, zoom = 1;
+  const MIN_ZOOM = 0.05, MAX_ZOOM = 8;
+
+  function updateTransform() {
+    world.style.transform = `translate(${panX}px,${panY}px) scale(${zoom})`;
+    zoomLabel.textContent = Math.round(zoom * 100) + '%';
+    updateGrid();
+  }
+
+  /* ===== dot grid ===== */
+  function updateGrid() {
+    const g = 40 * zoom;
+    const ox = panX % g, oy = panY % g;
+    viewport.style.backgroundImage = `radial-gradient(circle, var(--grid-color) 0.8px, transparent 0.8px)`;
+    viewport.style.backgroundSize = `${g}px ${g}px`;
+    viewport.style.backgroundPosition = `${ox}px ${oy}px`;
+  }
+
+  /* ===== panning ===== */
+  let isPanning = false, panSX, panSY;
+
+  viewport.addEventListener('pointerdown', (e) => {
+    if (e.target === viewport || e.target === world) {
+      isPanning = true;
+      panSX = e.clientX - panX;
+      panSY = e.clientY - panY;
+      viewport.classList.add('panning');
+      viewport.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    }
+  });
+  viewport.addEventListener('pointermove', (e) => {
+    if (!isPanning) return;
+    panX = e.clientX - panSX;
+    panY = e.clientY - panSY;
+    updateTransform();
+  });
+  viewport.addEventListener('pointerup', () => {
+    isPanning = false;
+    viewport.classList.remove('panning');
+  });
+
+  /* ===== wheel: trackpad scroll = pan, pinch/ctrl+scroll = zoom ===== */
+  viewport.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = viewport.getBoundingClientRect();
+
+    if (e.ctrlKey || e.metaKey) {
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const wx = (mx - panX) / zoom, wy = (my - panY) / zoom;
+      const factor = e.deltaY > 0 ? 0.95 : 1.05;
+      zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
+      panX = mx - wx * zoom;
+      panY = my - wy * zoom;
+    } else {
+      const hasX = Math.abs(e.deltaX) > 0.5;
+      if (hasX || Math.abs(e.deltaX) > Math.abs(e.deltaY) * 0.3) {
+        panX -= e.deltaX;
+        panY -= e.deltaY;
+      } else {
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const wx = (mx - panX) / zoom, wy = (my - panY) / zoom;
+        const factor = e.deltaY > 0 ? 0.95 : 1.05;
+        zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
+        panX = mx - wx * zoom;
+        panY = my - wy * zoom;
+      }
+    }
+    updateTransform();
+  }, { passive: false });
+
+  /* ===== zoom buttons ===== */
+  function zoomAt(factor) {
+    const r = viewport.getBoundingClientRect();
+    const cx = r.width / 2, cy = r.height / 2;
+    const wx = (cx - panX) / zoom, wy = (cy - panY) / zoom;
+    zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
+    panX = cx - wx * zoom;
+    panY = cy - wy * zoom;
+    updateTransform();
+  }
+  document.getElementById('zoomIn').onclick = () => zoomAt(1.25);
+  document.getElementById('zoomOut').onclick = () => zoomAt(0.8);
+  document.getElementById('zoomReset').onclick = () => { zoom = 1; panX = 0; panY = 0; updateTransform(); };
+  document.getElementById('zoomReset').title = UI_STRINGS.zoom.reset;
+
+  /* ===== coord indicator ===== */
+  viewport.addEventListener('pointermove', (e) => {
+    if (isPanning) return;
+    const r = viewport.getBoundingClientRect();
+    coordIndicator.textContent = `${Math.round((e.clientX - r.left - panX) / zoom)}, ${Math.round((e.clientY - r.top - panY) / zoom)}`;
+  });
+
+  /* ===== touch gestures ===== */
+  let lastPinchDist = null, lastPinchCenter = null;
+
+  viewport.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      const t0 = e.touches[0], t1 = e.touches[1];
+      lastPinchDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+      lastPinchCenter = { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 };
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  viewport.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 2) return;
+    e.preventDefault();
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+    const center = { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 };
+    if (lastPinchDist > 0) {
+      const r = viewport.getBoundingClientRect();
+      const mx = center.x - r.left, my = center.y - r.top;
+      const wx = (mx - panX) / zoom, wy = (my - panY) / zoom;
+      zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * Math.pow(dist / lastPinchDist, 0.6)));
+      panX = mx - wx * zoom;
+      panY = my - wy * zoom;
+    }
+    if (lastPinchCenter) {
+      panX += center.x - lastPinchCenter.x;
+      panY += center.y - lastPinchCenter.y;
+    }
+    lastPinchDist = dist;
+    lastPinchCenter = center;
+    updateTransform();
+  }, { passive: false });
+
+  viewport.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2) { lastPinchDist = null; lastPinchCenter = null; }
+  });
+
+  /* ===== undo ===== */
+  const undoStack = [];
+  function saveUndo() {
+    const s = [];
+    world.querySelectorAll('.canvas-el').forEach(el => {
+      s.push({ id: el.id, left: el.style.left, top: el.style.top });
+    });
+    undoStack.push({ panX, panY, zoom, assets: s });
+    if (undoStack.length > 60) undoStack.shift();
+  }
+  function undo() {
+    if (!undoStack.length) return;
+    const st = undoStack.pop();
+    panX = st.panX; panY = st.panY; zoom = st.zoom;
+    st.assets.forEach(a => {
+      const el = document.getElementById(a.id);
+      if (el) { el.style.left = a.left; el.style.top = a.top; }
+    });
+    updateTransform();
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]')) return;
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+  });
+
+  /* ===== draggable ===== */
+  function makeDraggable(el) {
+    let dragging = false, sx, sy, ox, oy;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || (e.target instanceof Element && e.target.closest('button, a, input, textarea, select, [contenteditable]'))) return;
+      dragging = true;
+      el.classList.add('dragging');
+      saveUndo();
+      sx = e.clientX; sy = e.clientY;
+      ox = parseFloat(el.style.left); oy = parseFloat(el.style.top);
+      el.setPointerCapture(e.pointerId);
+      e.stopPropagation();
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      el.style.left = (ox + (e.clientX - sx) / zoom) + 'px';
+      el.style.top = (oy + (e.clientY - sy) / zoom) + 'px';
+    });
+    el.addEventListener('pointerup', () => {
+      if (dragging) { dragging = false; el.classList.remove('dragging'); }
+    });
+  }
+
+  /* ===== unique id ===== */
+  let _id = 0;
+  function uid(prefix) { return (prefix || 'el') + '-' + (++_id); }
+
+  /* ===== API: addSection ===== */
+  function addSection(rowY, label) {
+    const parts = label.split(' ');
+    const num = parts[0] || '';
+    const rest = parts.slice(1).join(' ');
+    const el = document.createElement('div');
+    el.className = 'section-header';
+    el.style.left = '60px';
+    el.style.top = rowY + 'px';
+    el.innerHTML = `<span class="section-line"></span><span class="section-num">${num}</span><span class="section-label">${rest}</span>`;
+    world.appendChild(el);
+    return rowY;
+  }
+
+  /* ===== API: addTitle ===== */
+  function addTitle(x, y, text, options = {}) {
+    const el = document.createElement('div');
+    el.className = 'canvas-title';
+    el.id = uid('title');
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.fontSize = (options.fontSize || 48) + 'px';
+    if (options.fontWeight) el.style.fontWeight = options.fontWeight;
+    if (options.color) el.style.color = options.color;
+    if (options.maxWidth) el.style.maxWidth = options.maxWidth + 'px';
+    el.textContent = text;
+    world.appendChild(el);
+    return el;
+  }
+
+  /* ===== API: addText ===== */
+  function addText(x, y, text, options = {}) {
+    const el = document.createElement('div');
+    el.className = 'canvas-text canvas-el';
+    el.id = uid('text');
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.fontSize = (options.fontSize || 14) + 'px';
+    if (options.color) el.style.color = options.color;
+    if (options.maxWidth) el.style.maxWidth = options.maxWidth + 'px';
+    el.textContent = text;
+    world.appendChild(el);
+    makeDraggable(el);
+    return el;
+  }
+
+  /* ===== API: addTag ===== */
+  function addTag(x, y, label, options = {}) {
+    const el = document.createElement('div');
+    el.className = 'canvas-el';
+    el.id = uid('tag');
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    const dotColor = options.color || 'var(--accent)';
+    el.innerHTML = `<div class="canvas-tag"><span class="tag-dot" style="background:${dotColor}"></span>${label}</div>`;
+    world.appendChild(el);
+    makeDraggable(el);
+    return el;
+  }
+
+  /* ===== API: addContextCard ===== */
+  function addContextCard(x, y, w, h, title, content) {
+    const el = document.createElement('div');
+    el.className = 'canvas-el';
+    el.id = uid('ctx');
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.width = w + 'px';
+    if (h) el.style.height = h + 'px';
+    el.innerHTML = `<div class="context-card" style="width:100%;${h ? 'height:100%' : ''}">
+      <div class="card-head"><div class="head-indicator"></div><h3>${title}</h3></div>
+      <div class="card-content">${content}</div>
+    </div>`;
+    world.appendChild(el);
+    makeDraggable(el);
+    return el;
+  }
+
+  /* ===== API: addDesignSystemCard ===== */
+  function addDesignSystemCard(x, y, w, h, type, data) {
+    const el = document.createElement('div');
+    el.className = 'canvas-el';
+    el.id = uid('ds');
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.width = w + 'px';
+    if (h) el.style.height = h + 'px';
+
+    let body = '';
+    if (type === 'color' && Array.isArray(data.colors)) {
+      body = `<div class="color-grid">${data.colors.map(c =>
+        `<div class="color-chip" style="background:${c.hex}"><span class="chip-label">${c.name || c.hex}</span></div>`
+      ).join('')}</div>`;
+    } else if (type === 'typography' && Array.isArray(data.samples)) {
+      body = `<div class="type-stack">${data.samples.map(s =>
+        `<div class="type-row"><span class="type-label">${s.label}</span><span class="type-sample" style="font-size:${s.size}px;font-weight:${s.weight || 400}">${s.text || 'Aa'}</span></div>`
+      ).join('')}</div>`;
+    } else if (typeof data.html === 'string') {
+      body = data.html;
+    }
+
+    el.innerHTML = `<div class="ds-card" style="width:100%;${h ? 'height:100%' : ''}">
+      <div class="ds-head">${data.title || type}</div>
+      <div class="ds-body">${body}</div>
+    </div>`;
+    world.appendChild(el);
+    makeDraggable(el);
+    return el;
+  }
+
+  /* ===== API: addColorSwatch ===== */
+  function addColorSwatch(x, y, colors) {
+    const el = document.createElement('div');
+    el.className = 'canvas-el';
+    el.id = uid('swatch');
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.innerHTML = `<div class="color-swatch-group">${colors.map(c =>
+      `<div class="swatch-item">
+        <div class="swatch-circle" style="background:${c.hex}"></div>
+        <div class="swatch-name">${c.name || ''}</div>
+        <div class="swatch-hex">${c.hex}</div>
+      </div>`
+    ).join('')}</div>`;
+    world.appendChild(el);
+    makeDraggable(el);
+    return el;
+  }
+
+  /* ===== API: addTypeSample ===== */
+  function addTypeSample(x, y, samples) {
+    const el = document.createElement('div');
+    el.className = 'canvas-el';
+    el.id = uid('typesample');
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.innerHTML = `<div class="type-sample-group">${samples.map(s =>
+      `<div class="type-sample-row">
+        <span class="type-sample-meta">${s.label}<br>${s.size}px</span>
+        <span class="type-sample-text" style="font-size:${s.size}px;font-weight:${s.weight || 400};${s.font ? 'font-family:' + s.font : ''}">${s.text || 'The quick brown fox'}</span>
+      </div>`
+    ).join('')}</div>`;
+    world.appendChild(el);
+    makeDraggable(el);
+    return el;
+  }
+
+  /* ===== API: addPage ===== */
+  let _pageNum = 0;
+  function addPage(x, y, w, h, label, htmlContent) {
+    _pageNum++;
+    const el = document.createElement('div');
+    el.className = 'canvas-el';
+    el.id = uid('page');
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.width = w + 'px';
+    el.style.height = (h + 40) + 'px';
+    el.innerHTML = `<div class="design-page" style="width:${w}px;height:${h}px;">
+      <div class="page-content">${htmlContent}</div>
+    </div>
+    <div class="page-label"><span class="label-num">${String(_pageNum).padStart(2,'0')}</span>${label}</div>`;
+    world.appendChild(el);
+    makeDraggable(el);
+    return el;
+  }
+
+  /* ===== API: addNote ===== */
+  function addNote(x, y, tag, text) {
+    const el = document.createElement('div');
+    el.className = 'canvas-el';
+    el.id = uid('note');
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.innerHTML = `<div class="canvas-note">
+      <div class="note-tag">${tag}</div>
+      <div class="note-body">${text}</div>
+    </div>`;
+    world.appendChild(el);
+    makeDraggable(el);
+    return el;
+  }
+
+  /* ===== API: addDiagram ===== */
+  function addDiagram(x, y, w, h, htmlContent) {
+    const el = document.createElement('div');
+    el.className = 'canvas-el';
+    el.id = uid('diagram');
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.width = w + 'px';
+    el.style.height = h + 'px';
+    el.innerHTML = `<div class="canvas-diagram" style="width:100%;height:100%;">
+      <div class="diagram-content">${htmlContent}</div>
+    </div>`;
+    world.appendChild(el);
+    makeDraggable(el);
+    return el;
+  }
+
+  /* ===== Layout helpers (overlap prevention) ===== */
+  function below(el, gap) { if (gap === undefined) gap = 20; return parseFloat(el.style.top) + el.offsetHeight + gap; }
+  function rightOf(el, gap) { if (gap === undefined) gap = 20; return parseFloat(el.style.left) + el.offsetWidth + gap; }
+  function maxY(els, gap) { if (gap === undefined) gap = 20; return Math.max(...els.map(e => parseFloat(e.style.top) + e.offsetHeight)) + gap; }
+  function maxX(els, gap) { if (gap === undefined) gap = 20; return Math.max(...els.map(e => parseFloat(e.style.left) + e.offsetWidth)) + gap; }
+
+  /* ===== expose API ===== */
+  window.canvas = { addSection, addTitle, addText, addTag, addContextCard, addDesignSystemCard, addColorSwatch, addTypeSample, addPage, addNote, addDiagram, below, rightOf, maxY, maxX };
+
+  /* ===== demo scene ===== */
+  /* Layout rules:
+     - Vertical positioning uses below(el, gap) based on actual rendered height of the element above, no hardcoded Y
+     - Horizontal positioning uses rightOf(el, gap) or fixed X (fixed values are fine when element widths are known)
+     - Cross-row alignment uses maxY([all elements in that row], 80) to get the next row's starting Y
+     - Always save the return value of each add* call to a variable for later element references
+  */
+  function initScene() {
+
+    addSection(40, '01 PROJECT CONTEXT');
+    const r1Title = addTitle(100, 96, 'Relay · 通用自托管中转站 V3', { fontSize: 52, fontWeight: 700 });
+    const r1Desc = addText(100, below(r1Title, 14), '开源自托管 LLM API 中转站（白标）：公开区（首页/模型广场/模型详情/文档）做产品叙事，控制台五屏与local 认证与五步安装向导、运营后台十屏高密度台账——订单确认联动用户余额、资金池划拨联动侧栏。视觉基因沿用 @zmzai/theme 0.9 —— 纯白底、墨黑结构、品红点睛只在深色载体登场。', { fontSize: 15, maxWidth: 470 });
+    const tagsY = below(r1Desc, 18);
+    const t1 = addTag(100, tagsY, '21 屏：登录/安装 + 用户 9 + 运营 10');
+    const t2 = addTag(rightOf(t1, 8), tagsY, '工程台账方向');
+    const t3 = addTag(rightOf(t2, 8), tagsY, '@zmzai/theme 0.9');
+    const t4 = addTag(rightOf(t3, 8), tagsY, '桌面优先 · 1440');
+    const cardsY = below(t1, 26);
+    const c1 = addContextCard(100, cardsY, 300, null, '产品是什么', '<ul><li>OpenAI 兼容统一入口，换 baseURL 即用</li><li>按模型自动路由与故障切换</li><li>价格公开，按 token 实时计费</li><li>zrk_ Key + 余额账本 + 充值流程</li></ul>');
+    const c2 = addContextCard(420, cardsY, 300, null, '这次改了什么', '<ul><li>公开区侧栏改顶栏，首页做产品叙事与路由图</li><li>控制台改台账式高密度表格</li><li>墨底终端成为品红点睛的合法舞台</li><li>全站数字等宽右对齐 tabular-nums</li></ul>');
+    const c3 = addContextCard(740, cardsY, 300, null, '保留什么', '<ul><li>真实模型目录与价格（glm-5.3 / flash）</li><li>zrk_ Key 一次性展示与吊销语义</li><li>¥8/¥40/¥160 额度包与申请码流程</li><li>品牌云朵标与 Margin 命名</li></ul>');
+    const flow = addDiagram(1080, cardsY, 420, 208, '<div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:14px">用户流程</div><div style="display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--text-secondary);line-height:1.5"><div>① 广场：首页 → 模型广场 → 模型详情 → API 文档</div><div>② 登录（auth.zmzai.cloud 共享会话）</div><div>③ 控制台：概览 → Keys 创建/吊销 → 用量筛选 → 账单核对 → 充值申请码</div></div>');
+    const notesY = maxY([c1, c2, c3, flow], 28);
+    const n1 = addNote(100, notesY, '设计立场', '品红 spot 遵守 theme 纪律：只出现在墨底终端上，满彩每屏最多一次；语义色只讲好坏，不参与装饰。');
+    const n2 = addNote(rightOf(n1, 20), notesY, '数据口径', '模型、价格、额度包、流程文案均取自生产；余额/调用/账单为演示数据，页面右上角有「原型 · 演示数据」标记。');
+
+    const r2Start = maxY([c1, c2, c3, flow, n1, n2], 80);
+    addSection(r2Start, '02 DESIGN SYSTEM');
+    const dsY = r2Start + 60;
+    const colorCard = addDesignSystemCard(100, dsY, 470, null, 'color', {
+      title: '色板 · @zmzai/theme 0.9',
+      html: `<div class="color-swatch-group" style="flex-wrap:wrap;gap:16px;">
+        <div class="swatch-item"><div class="swatch-circle" style="background:#ffffff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)"></div><div class="swatch-name">bg 纯白</div><div class="swatch-hex">oklch(1 0 0)</div></div>
+        <div class="swatch-item"><div class="swatch-circle" style="background:#f7f7f8"></div><div class="swatch-name">surface</div><div class="swatch-hex">L .985</div></div>
+        <div class="swatch-item"><div class="swatch-circle" style="background:#2e2f33"></div><div class="swatch-name">ink 墨黑</div><div class="swatch-hex">L .21</div></div>
+        <div class="swatch-item"><div class="swatch-circle" style="background:#e8e8ea"></div><div class="swatch-name">line</div><div class="swatch-hex">L .92</div></div>
+        <div class="swatch-item"><div class="swatch-circle" style="background:#3d9e5f"></div><div class="swatch-name">success</div><div class="swatch-hex">oklch .499 .13 145</div></div>
+        <div class="swatch-item"><div class="swatch-circle" style="background:#c2863d"></div><div class="swatch-name">warning</div><div class="swatch-hex">oklch .499 .12 75</div></div>
+        <div class="swatch-item"><div class="swatch-circle" style="background:#c94d4d"></div><div class="swatch-name">danger</div><div class="swatch-hex">oklch .499 .18 25</div></div>
+        <div class="swatch-item"><div class="swatch-circle" style="background:#FF00A8"></div><div class="swatch-name">spot 点睛（仅墨底）</div><div class="swatch-hex">#FF00A8</div></div>
+        <div class="swatch-item"><div class="swatch-circle" style="background:#282a30"></div><div class="swatch-name">dark 终端底</div><div class="swatch-hex">L .17</div></div>
+      </div>`
+    });
+    const typeCard = addDesignSystemCard(600, dsY, 430, null, 'typography', {
+      title: '字体 · MiSans + JetBrains Mono',
+      html: `<div class="type-sample-group">
+        <div class="type-sample-row"><span class="type-sample-meta">Display<br>46px</span><span class="type-sample-text" style="font-size:46px;font-weight:600;letter-spacing:-0.02em;">一个入口</span></div>
+        <div class="type-sample-row"><span class="type-sample-meta">H1<br>28px</span><span class="type-sample-text" style="font-size:28px;font-weight:600;letter-spacing:-0.01em;">模型广场</span></div>
+        <div class="type-sample-row"><span class="type-sample-meta">Body<br>15px</span><span class="type-sample-text" style="font-size:15px;">价格公开、按 token 计费、缓存命中享折扣。</span></div>
+        <div class="type-sample-row"><span class="type-sample-meta">Mono<br>13px</span><span class="type-sample-text" style="font-size:13px;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums">glm-5.3 ¥0.0020 / 1,024,000</span></div>
+      </div>`
+    });
+    const compCard = addDesignSystemCard(1060, dsY, 440, null, 'components', {
+      title: '组件 · 锐角台账语言',
+      html: `<div style="display:flex;flex-direction:column;gap:14px;font-family:'MiSans','PingFang SC',sans-serif;background:#ffffff;padding:16px;border-radius:8px;border:1px solid rgba(0,0,0,.08)">
+        <div style="display:flex;gap:10px;align-items:center">
+          <button style="padding:8px 16px;border-radius:3px;border:1px solid oklch(0.21 0.008 265);background:oklch(0.21 0.008 265);color:#fff;font-size:14px;font-weight:500;cursor:pointer;">创建 API Key</button>
+          <button style="padding:8px 16px;border-radius:3px;border:1px solid oklch(0.87 0.005 265);background:transparent;color:oklch(0.21 0.008 265);font-size:14px;cursor:pointer;">次按钮</button>
+          <span style="display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 8px;border-radius:2px;font-size:12px;background:oklch(0.955 0.035 145);color:oklch(0.499 0.13 145);border:1px solid oklch(0.499 0.13 145 / .2)"><span style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>成功</span>
+        </div>
+        <div style="border:1px solid oklch(0.92 0.004 265);border-radius:6px;overflow:hidden;font-size:13px;color:oklch(0.21 0.008 265)">
+          <div style="display:flex;padding:9px 14px;border-bottom:1px solid oklch(0.21 0.008 265);font-family:monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:oklch(0.442 0.017 265)"><span style="flex:1">模型</span><span>输出 / 1K</span></div>
+          <div style="display:flex;padding:11px 14px;border-bottom:1px solid oklch(0.92 0.004 265)"><span style="flex:1;font-family:monospace;font-weight:500">glm-5.3</span><span style="font-family:monospace">¥0.0080</span></div>
+          <div style="display:flex;padding:11px 14px"><span style="flex:1;font-family:monospace;font-weight:500">glm-5.3-flash</span><span style="font-family:monospace">¥0.0008</span></div>
+        </div>
+        <div style="background:oklch(0.17 0.006 265);border-radius:6px;padding:12px 16px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:oklch(0.97 0.002 265)"><span style="color:oklch(0.72 0.005 265)">POST</span> /v1/chat/completions · <span style="color:#FF42BB;font-weight:600">¥0.0055</span></div>
+      </div>`
+    });
+    const r3Start = maxY([colorCard, typeCard, compCard], 80);
+    addSection(r3Start, '03 DESIGN DELIVERABLES');
+    const bandAY = r3Start + 60;
+    addText(100, bandAY, '登录与安装向导 + 公开区 · 顶栏导航，产品叙事', { fontSize: 13, color: 'var(--accent)', maxWidth: 600 });
+    const p_login = addPage(100, below(addText(100, bandAY, ' ', {fontSize:1}), 26), 1280, 800, '登录 · local 认证', `<div class="rp"><div class="rp"><div class="auth-wrap"><div class="auth-card">
+<div class="mark"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4.5 4.5 0 0 0 6.4.4l2.8-2.8a4.5 4.5 0 0 0-6.4-6.4l-1.6 1.6"/><path d="M14 10a4.5 4.5 0 0 0-6.4-.4L4.8 12.4a4.5 4.5 0 0 0 6.4 6.4l1.6-1.6"/></svg><span class="nm brand-name">Relay</span></div>
+<div class="card pad"><p class="h3">登录到控制台</p>
+<div style="display:grid;gap:14px;margin-top:16px">
+<div><p class="lb" style="font-size:13px;font-weight:500;margin-bottom:6px">邮箱</p><p class="input" style="display:flex;align-items:center;color:var(--ink-2)">ulan@relay.dev</p></div>
+<div><p class="lb" style="font-size:13px;font-weight:500;margin-bottom:6px">密码</p><p class="input mono" style="display:flex;align-items:center">••••••••</p></div>
+<div><span class="btn" style="display:inline-flex;align-items:center">登录</span></div>
+</div></div>
+<div class="hintbox"><span class="demo-tag">原型 · 演示数据</span><br>演示账号：<span class="mono">ulan@relay.dev</span>，密码任意。<br>首次部署？<span style="border-bottom:1px solid var(--line-strong)">运行安装向导 →</span></div>
+</div></div></div></div>`);
+    const p_setup = addPage(1440, below(addText(100, bandAY, ' ', {fontSize:1}), 26), 1280, 800, '安装向导 · 首启五步', `<div class="rp"><div class="rp"><div class="content wiz">
+<div class="pagehead"><div class="row"><div><p class="eyebrow">首次部署</p><h1 class="h1" style="margin-top:6px">安装向导</h1><p class="desc">五步完成自托管部署：管理员 → 品牌 → 首条上游渠道。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span></div></div></div>
+<div class="wiz-track">
+<div class="wiz-step"><span class="no">✓</span><span class="tt">欢迎</span></div>
+<div class="wiz-step"><span class="no">✓</span><span class="tt">管理员</span></div>
+<div class="wiz-step current"><span class="no">03</span><span class="tt">品牌</span></div>
+<div class="wiz-step"><span class="no">04</span><span class="tt">渠道</span></div>
+<div class="wiz-step"><span class="no">05</span><span class="tt">完成</span></div>
+</div>
+<div class="wiz-pane active">
+<p class="h2">品牌与站点</p>
+<p class="small t-muted" style="margin-top:8px">白标配置：站点名、对外域名与点睛色即刻生效，全站引用同步更新。</p>
+<div style="display:grid;gap:14px;margin-top:18px;max-width:440px">
+<div><p class="lb" style="font-size:13px;font-weight:500;margin-bottom:6px">站点名</p><p class="input" style="display:flex;align-items:center">Acme Relay</p></div>
+<div><p class="lb" style="font-size:13px;font-weight:500;margin-bottom:6px">对外域名</p><p class="input mono" style="display:flex;align-items:center">api.acme.io</p><p class="hint mono">客户端将以 https://api.acme.io/v1 作为 baseURL。</p></div>
+<div><p class="lb" style="font-size:13px;font-weight:500;margin-bottom:6px">点睛色（终端面板内的强调色）</p>
+<div class="swatch-row"><span class="spot-pick" style="background:#FF00A8;width:44px;height:44px;display:inline-flex;border-radius:4px;border:2px solid transparent"></span><span class="spot-pick" style="background:#5B5BD6;width:44px;height:44px;display:inline-flex;border-radius:4px;border:2px solid var(--ink)"></span><span class="spot-pick" style="background:#0F8A5F;width:44px;height:44px;display:inline-flex;border-radius:4px;border:2px solid transparent"></span></div></div>
+</div></div>
+<div class="wiz-actions"><span class="btn ghost" style="display:inline-flex;align-items:center">上一步</span><span class="btn" style="display:inline-flex;align-items:center">下一步</span></div>
+</div></div></div>`);
+    const p_home = addPage(2780, below(addText(100, bandAY, ' ', {fontSize:1}), 26), 1280, 800, '首页 · 产品叙事', `<div class="rp"><header class="topnav"><a class="brand" href="javascript:void(0)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h9.5a3.5 3.5 0 0 0 .5-6.96 5.5 5.5 0 0 0-10.7-1.2A4 4 0 0 0 7 18Z"/></svg><span class="name">Margin<span class="sub">中转驿 · api.relay.dev</span></span></a><nav aria-label="公开区"><a href="javascript:void(0)">模型广场</a><a href="javascript:void(0)">API 文档</a></nav><div class="spacer"></div><div class="meta"><button class="btn sm">登录</button></div></header><main class="main"><div class="content wide"><div class="hero"><div><div class="eyebrow-row"><span class="eyebrow">2 个模型 · 1 条上游渠道 · OpenAI 兼容</span><span class="sep"></span></div><h1 class="display">一个入口，<br>调用所有上游模型</h1><p class="desc">Relay 提供 OpenAI 兼容的统一 API：按模型自动路由到上游渠道，价格公开、按 token 计费、缓存命中享折扣。</p><div class="cta"><button class="btn">登录开始使用</button><a class="ghostlink" href="javascript:void(0)">查看模型与价格</a></div><div class="facts"><div class="f"><p class="v">¥0.0002</p><p class="k">输入价 / 1K 起</p></div><div class="f"><p class="v">1.3M</p><p class="k">最大上下文 tokens</p></div><div class="f"><p class="v">¥1</p><p class="k">新账号体验额度</p></div></div></div><div class="term"><div class="terminal"><div class="bar"><span class="sig"><i></i><i></i><i></i></span>chat/completions · stream</div><pre><span class="cm">POST /api/v1/chat/completions — SSE 1.8s</span>
+{
+  <span class="cm">"model"</span>: <span class="ss">"glm-5.3"</span>,
+  "stream": true,
+  "messages": [{ "role": "user", "content": "帮我总结这份周报" }]
+}
+<span class="cm">data:</span> {"usage":{"prompt_tokens":1840,"completion_tokens":356}}</pre><div class="foot"><span class="ok">已结算 · glm-official</span><span class="cost">1,840 in · 1,024 cached · 356 out → <b>¥0.0055</b></span></div></div></div></div><div class="sect"><div class="secthead"><h2>渠道路由</h2></div><div class="routemap"><div class="node"><p class="nk">调用方</p><p class="nv">OpenAI SDK · zcode · codex</p><p class="nd">任何说 OpenAI 协议的工具</p></div><div class="arrow" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></div><div class="node dark"><p class="nk">Relay</p><p class="nv mono">api.relay.dev/v1</p><p class="nd">鉴权 · 余额预占 · 自动路由与故障切换 · 按 token 结算</p></div><div class="arrow" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></div><div class="node"><p class="nk">上游渠道</p><p class="nv mono">glm-official</p><p class="nd">价格按实际使用的渠道计算</p></div></div></div></div></main></div>`);
+    const p_models = addPage(4120, below(addText(100, bandAY, ' ', {fontSize:1}), 26), 1280, 800, '模型广场 · 公开目录', `<div class="rp"><header class="topnav"><a class="brand" href="javascript:void(0)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h9.5a3.5 3.5 0 0 0 .5-6.96 5.5 5.5 0 0 0-10.7-1.2A4 4 0 0 0 7 18Z"/></svg><span class="name">Margin<span class="sub">中转驿 · api.relay.dev</span></span></a><nav aria-label="公开区"><a href="javascript:void(0)" aria-current="page">模型广场</a><a href="javascript:void(0)">API 文档</a></nav><div class="spacer"></div><div class="meta"><button class="btn sm">登录</button></div></header><main class="main"><div class="content wide"><header class="pagehead"><div class="row"><div><p class="eyebrow">公开目录</p><h1 class="h1" style="margin-top:6px">模型广场</h1><p class="desc">价格为每 1K token 的人民币实际单价，按最终使用的渠道计费。</p></div><div class="actions"><div class="search"><span class="count">2</span></div></div></div></header><div class="card"><table class="ledger-table"><thead><tr><th>模型</th><th>渠道</th><th>当前状态</th><th class="r">上下文</th><th class="r">输入 / 1K</th><th class="r">输出 / 1K</th><th class="r">缓存读 / 1K</th></tr></thead><tbody><tr><td><span class="mono" style="font-weight:500">glm-5.3</span></td><td class="mono small t-muted">glm-official</td><td><span class="badge success"><span class="dot"></span>可路由</span></td><td class="r num small t-muted">1,024,000</td><td class="r num small">¥0.0020</td><td class="r num small">¥0.0080</td><td class="r num small t-muted">¥0.0010</td></tr>
+<tr><td><span class="mono" style="font-weight:500">glm-5.3-flash</span></td><td class="mono small t-muted">glm-official</td><td><span class="badge success"><span class="dot"></span>可路由</span></td><td class="r num small t-muted">1,300,000</td><td class="r num small">¥0.0002</td><td class="r num small">¥0.0008</td><td class="r num small t-muted">¥0.0001</td></tr></tbody></table></div><p class="caption t-muted" style="margin-top:10px">「可路由」表示当前没有阻断记录，不保证上游实时可用。表头点击排序。</p></div></main></div>`);
+    const p_model = addPage(5460, below(addText(100, bandAY, ' ', {fontSize:1}), 26), 1280, 800, '模型详情 · glm-5.3', `<div class="rp"><header class="topnav"><a class="brand" href="javascript:void(0)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h9.5a3.5 3.5 0 0 0 .5-6.96 5.5 5.5 0 0 0-10.7-1.2A4 4 0 0 0 7 18Z"/></svg><span class="name">Margin<span class="sub">中转驿 · api.relay.dev</span></span></a><nav aria-label="公开区"><a href="javascript:void(0)" aria-current="page">模型广场</a><a href="javascript:void(0)">API 文档</a></nav><div class="spacer"></div><div class="meta"><button class="btn sm">登录</button></div></header><main class="main"><div class="content wide"><header class="pagehead"><div class="row"><div><p class="eyebrow">模型详情</p><h1 class="h1" style="margin-top:6px">glm-5.3</h1><p class="desc">以下为对应渠道每 1K token 的人民币实际单价。</p></div><div class="actions"><span class="badge">渠道 glm-official</span><span class="badge success"><span class="dot"></span>可路由</span></div></div></header><div class="statgrid"><div class="cell"><p class="k">输入 / 1K</p><p class="v">¥0.0020</p></div><div class="cell"><p class="k">输出 / 1K</p><p class="v">¥0.0080</p></div><div class="cell"><p class="k">缓存读 / 1K</p><p class="v">¥0.0010</p></div><div class="cell"><p class="k">缓存写 / 1K</p><p class="v">按输入价</p></div><div class="cell"><p class="k">上下文</p><p class="v">1,024,000</p></div></div><div class="sect" style="margin-top:32px"><div class="secthead"><h2>参数</h2></div><div style="display:flex;gap:28px;margin-top:16px"><div><p class="eyebrow" style="margin-bottom:8px">推理强度 reasoning_effort</p><div class="chips"><span class="chip">low</span><span class="chip">medium</span><span class="chip">high</span></div></div><div><p class="eyebrow" style="margin-bottom:8px">流式 stream</p><p class="small t-muted" style="line-height:29px">SSE 透传，末尾 usage 事件携带 token 统计</p></div></div></div><div class="sect"><div class="secthead"><h2>流式调用示例</h2></div><div class="terminal" style="margin-top:16px"><div class="bar"><span class="sig"><i></i><i></i><i></i></span>curl — chat completions</div><pre>curl https://api.relay.dev/api/v1/chat/completions \
+  -H <span class="sp">"Authorization: Bearer &lt;YOUR_API_KEY&gt;"</span> \
+  -H "Content-Type: application/json" \
+  -d '{"model":<span class="sp">"glm-5.3"</span>,"messages":[{"role":"user","content":"你好"}]}'</pre></div></div></div></main></div>`);
+    const p_docs = addPage(6800, below(addText(100, bandAY, ' ', {fontSize:1}), 26), 1280, 800, 'API 文档 · 接口参考', `<div class="rp"><header class="topnav"><a class="brand" href="javascript:void(0)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h9.5a3.5 3.5 0 0 0 .5-6.96 5.5 5.5 0 0 0-10.7-1.2A4 4 0 0 0 7 18Z"/></svg><span class="name">Margin<span class="sub">中转驿 · api.relay.dev</span></span></a><nav aria-label="公开区"><a href="javascript:void(0)">模型广场</a><a href="javascript:void(0)" aria-current="page">API 文档</a></nav><div class="spacer"></div><div class="meta"><button class="btn sm">登录</button></div></header><main class="main"><div class="content"><header class="pagehead"><div class="row"><div><p class="eyebrow">接口参考</p><h1 class="h1" style="margin-top:6px">API 文档</h1><p class="desc">Relay 兼容 OpenAI Chat Completions 协议：把 baseURL 指向 api.relay.dev/v1。</p></div></div></header><div class="docs-layout"><nav class="docs-toc"><a class="active" href="javascript:void(0)">鉴权</a><a href="javascript:void(0)">非流式请求</a><a href="javascript:void(0)">流式请求</a><a href="javascript:void(0)">渠道路由</a><a href="javascript:void(0)">推理强度</a><a href="javascript:void(0)">计费</a><a href="javascript:void(0)">上游异常与重试</a></nav><div class="docs-body"><section><h2><span class="n">01</span>鉴权</h2><p>在控制台创建 API Key 后，通过 Authorization: Bearer 请求头传入。Key 可随时吊销，每次调用按 token 实时计费。</p></section><section><h2><span class="n">02</span>非流式请求</h2><div class="terminal" style="margin-top:14px"><pre>curl https://api.relay.dev/v1/chat/completions \
+  -H <span class="sp">"Authorization: Bearer &lt;YOUR_API_KEY&gt;"</span> \</pre></div></section><section><h2><span class="n">04</span>渠道路由</h2><p>默认按模型自动选择上游渠道，失败时尝试其他可用渠道；需要固定渠道时传入 "channel"。</p><div class="margin-note">价格按最终使用的渠道计算，不同渠道的价格可能不同。</div></section></div></div></div></main></div>`);
+    const bandBY = Math.max(p_login.offsetTop + p_login.offsetHeight, p_setup.offsetTop + p_setup.offsetHeight, p_home.offsetTop + p_home.offsetHeight, p_models.offsetTop + p_models.offsetHeight, p_model.offsetTop + p_model.offsetHeight, p_docs.offsetTop + p_docs.offsetHeight) + 90;
+    addText(100, bandBY, '控制台 · 侧栏工作台，台账密度', { fontSize: 13, color: 'var(--accent)', maxWidth: 600 });
+    const p_overview = addPage(100, bandBY + 26, 1280, 800, '控制台 · 概览', `<div class="rp"><div class="shell"><aside class="sidebar"><div class="brand"><span class="name">Margin</span></div><nav aria-label="控制台"><div class="navgroup"><span class="eyebrow">广场</span><button class="navitem"><span class="t">模型广场</span></button><button class="navitem"><span class="t">API 文档</span></button></div><div class="navgroup"><span class="eyebrow">控制台</span><button class="navitem" aria-current="page"><span class="t">概览</span></button><button class="navitem"><span class="t">API Keys</span></button><button class="navitem"><span class="t">用量</span></button><button class="navitem"><span class="t">账单</span></button><button class="navitem"><span class="t">额度充值</span></button></div></nav><div class="account"><span class="avatar">U</span><div class="who"><p class="nm">Ulan</p><p class="bal">余额 <span class="num">¥2,008.63</span></p></div></div></aside><main class="main"><div class="content"><header class="pagehead"><div class="row"><div><p class="eyebrow">控制台</p><h1 class="h1" style="margin-top:6px">概览</h1><p class="desc">余额、消费与最近调用。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span><div class="chips"><span class="chip" aria-pressed="true">近 7 天</span><span class="chip">近 30 天</span></div></div></div></header><div class="kpis"><div class="kpi"><p class="lb">可用余额</p><p class="v">¥2,008.63</p><p class="s">随每次调用扣减</p></div><div class="kpi"><p class="lb">近 7 天消费</p><p class="v">¥3.42</p><p class="s">214 笔调用</p></div><div class="kpi"><p class="lb">近 7 天成功率</p><p class="v">98.6%</p><p class="s">211 / 214 笔成功</p></div></div><div class="sect"><div class="secthead"><h2>每日消费 · 近 7 天</h2><span class="more mono">峰值 ¥2.60</span></div><div class="card pad" style="margin-top:16px"><svg viewBox="0 0 640 160" style="width:100%;height:auto" role="img" aria-label="每日消费折线图"><path d="M10,142.9L114.3,97.4L218.6,126.2L322.9,66.5L427.1,114.8L531.4,55.1L635.7,24.4L635.7,144L10,144Z" fill="oklch(0.21 0.008 265 / .06)"></path><path d="M10,142.9L114.3,97.4L218.6,126.2L322.9,66.5L427.1,114.8L531.4,55.1L635.7,24.4" fill="none" stroke="var(--ink)" stroke-width="1.5"></path><circle cx="635.7" cy="24.4" r="3" fill="var(--ink)"></circle></svg><div id="spark-xlabels"><span>11-15</span><span>11-16</span><span>11-17</span><span>11-18</span><span>11-19</span><span>11-20</span><span>11-21</span></div></div></div><div class="sect"><div class="secthead"><h2>最近调用</h2><span class="more mono">全部记录 →</span></div><div class="card" style="margin-top:16px"><table class="ledger-table"><thead><tr><th>时间</th><th>模型</th><th>状态</th><th class="r">输入</th><th class="r">输出</th><th class="r">费用</th></tr></thead><tbody><tr><td class="mono small t-muted">11-21 15:32</td><td><span class="mono small" style="font-weight:500">glm-5.3</span></td><td><span class="badge success"><span class="dot"></span>成功</span></td><td class="r num small t-muted">5,204</td><td class="r num small t-muted">812</td><td class="r num small" style="font-weight:500">¥0.0172</td></tr><tr><td class="mono small t-muted">11-21 14:47</td><td><span class="mono small" style="font-weight:500">glm-5.3-flash</span></td><td><span class="badge success"><span class="dot"></span>成功</span></td><td class="r num small t-muted">12,331</td><td class="r num small t-muted">1,104</td><td class="r num small" style="font-weight:500">¥0.0070</td></tr><tr><td class="mono small t-muted">11-21 13:58</td><td><span class="mono small" style="font-weight:500">glm-5.3</span></td><td><span class="badge danger"><span class="dot"></span>失败</span></td><td class="r num small t-muted">3,180</td><td class="r num small t-muted">—</td><td class="r num small" style="font-weight:500">¥0.00</td></tr></tbody></table></div></div></div></main></div></div>`);
+    const p_keys = addPage(1440, bandBY + 26, 1280, 800, '控制台 · API Keys', `<div class="rp"><div class="shell"><aside class="sidebar"><div class="brand"><span class="name">Margin</span></div><nav aria-label="控制台"><div class="navgroup"><span class="eyebrow">广场</span><button class="navitem"><span class="t">模型广场</span></button><button class="navitem"><span class="t">API 文档</span></button></div><div class="navgroup"><span class="eyebrow">控制台</span><button class="navitem"><span class="t">概览</span></button><button class="navitem" aria-current="page"><span class="t">API Keys</span></button><button class="navitem"><span class="t">用量</span></button><button class="navitem"><span class="t">账单</span></button><button class="navitem"><span class="t">额度充值</span></button></div></nav><div class="account"><span class="avatar">U</span><div class="who"><p class="nm">Ulan</p><p class="bal">余额 <span class="num">¥2,008.63</span></p></div></div></aside><main class="main"><div class="content"><header class="pagehead"><div class="row"><div><p class="eyebrow">控制台</p><h1 class="h1" style="margin-top:6px">API Keys</h1><p class="desc">创建和管理调用凭证。完整 Key 仅在创建时显示一次。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span><button class="btn">创建 API Key</button></div></div></header><div class="card"><div style="display:flex;padding:14px 20px;border-bottom:1px solid var(--line)"><p class="small t-muted">共 2 个 Key · 2 个启用中</p></div><div class="keyrow"><div class="id"><div class="nm"><p style="font-weight:600">本地开发</p><span class="badge success"><span class="dot"></span>启用</span></div><p class="prefix mono small t-muted"><code class="inline">zrk_lo9x…</code></p></div><div class="stats"><div class="cell"><p class="v">60/min</p><p class="k">限速</p></div><div class="cell"><p class="v">不限</p><p class="k">月上限</p></div><div class="cell"><p class="v small" style="font-family:var(--font-sans);font-weight:400;color:var(--ink-2)">刚刚使用</p><p class="k">最近调用</p></div></div></div><div class="keyrow"><div class="id"><div class="nm"><p style="font-weight:600">生产环境</p><span class="badge success"><span class="dot"></span>启用</span></div><p class="prefix mono small t-muted"><code class="inline">zrk_pr4k…</code></p></div><div class="stats"><div class="cell"><p class="v">120/min</p><p class="k">限速</p></div><div class="cell"><p class="v">¥50</p><p class="k">月上限 · 已用 ¥12.40</p></div><div class="cell"><p class="v small" style="font-family:var(--font-sans);font-weight:400;color:var(--ink-2)">3 小时前使用</p><p class="k">最近调用</p></div></div></div></div></div></main></div></div>`);
+    const p_usage = addPage(2780, bandBY + 26, 1280, 800, '控制台 · 用量', `<div class="rp"><div class="shell"><aside class="sidebar"><div class="brand"><span class="name">Margin</span></div><nav aria-label="控制台"><div class="navgroup"><span class="eyebrow">广场</span><button class="navitem"><span class="t">模型广场</span></button><button class="navitem"><span class="t">API 文档</span></button></div><div class="navgroup"><span class="eyebrow">控制台</span><button class="navitem"><span class="t">概览</span></button><button class="navitem"><span class="t">API Keys</span></button><button class="navitem" aria-current="page"><span class="t">用量</span></button><button class="navitem"><span class="t">账单</span></button><button class="navitem"><span class="t">额度充值</span></button></div></nav><div class="account"><span class="avatar">U</span><div class="who"><p class="nm">Ulan</p><p class="bal">余额 <span class="num">¥2,008.63</span></p></div></div></aside><main class="main"><div class="content"><header class="pagehead"><div class="row"><div><p class="eyebrow">控制台</p><h1 class="h1" style="margin-top:6px">用量</h1><p class="desc">调用记录与费用，按时间倒序分页展示。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span></div></div></header><div class="chips" style="margin-bottom:16px"><span class="chip" aria-pressed="true">全部 <span class="n">46</span></span><span class="chip">成功 <span class="n">43</span></span><span class="chip">失败 <span class="n">2</span></span><span class="chip">待结算 <span class="n">1</span></span></div><div class="card"><table class="ledger-table"><thead><tr><th>时间</th><th>模型 / 渠道</th><th>状态</th><th class="r">输入</th><th class="r">缓存读</th><th class="r">输出</th><th class="r">费用</th></tr></thead><tbody><tr><td class="mono small t-muted">11-21 15:32</td><td><span class="mono small" style="font-weight:500">glm-5.3</span><p class="caption t-muted mono" style="margin-top:2px">glm-official</p></td><td><span class="badge success"><span class="dot"></span>成功</span></td><td class="r num small t-muted">5,204</td><td class="r num small t-muted">2,880</td><td class="r num small t-muted">812</td><td class="r num small" style="font-weight:500">¥0.0172</td></tr><tr><td class="mono small t-muted">11-21 14:47</td><td><span class="mono small" style="font-weight:500">glm-5.3-flash</span><p class="caption t-muted mono" style="margin-top:2px">glm-official</p></td><td><span class="badge success"><span class="dot"></span>成功</span></td><td class="r num small t-muted">12,331</td><td class="r num small t-muted">6,400</td><td class="r num small t-muted">1,104</td><td class="r num small" style="font-weight:500">¥0.0070</td></tr><tr><td class="mono small t-muted">11-21 13:58</td><td><span class="mono small" style="font-weight:500">glm-5.3</span><p class="caption t-muted mono" style="margin-top:2px">glm-official</p></td><td><span class="badge danger"><span class="dot"></span>失败</span><p class="caption" style="color:var(--danger);margin-top:3px">UPSTREAM_RATE_LIMITED · Retry-After 12s</p></td><td class="r num small t-muted">3,180</td><td class="r num small t-muted">—</td><td class="r num small t-muted">—</td><td class="r num small" style="font-weight:500">¥0.00</td></tr><tr><td class="mono small t-muted">11-21 11:41</td><td><span class="mono small" style="font-weight:500">glm-5.3</span><p class="caption t-muted mono" style="margin-top:2px">glm-official</p></td><td><span class="badge success"><span class="dot"></span>成功</span></td><td class="r num small t-muted">8,412</td><td class="r num small t-muted">4,096</td><td class="r num small t-muted">1,866</td><td class="r num small" style="font-weight:500">¥0.0284</td></tr><tr><td class="mono small t-muted">11-21 10:26</td><td><span class="mono small" style="font-weight:500">glm-5.3-flash</span><p class="caption t-muted mono" style="margin-top:2px">glm-official</p></td><td><span class="badge warning"><span class="dot"></span>待结算</span></td><td class="r num small t-muted">2,048</td><td class="r num small t-muted">—</td><td class="r num small t-muted">—</td><td class="r num small" style="font-weight:500">¥0.00</td></tr><tr><td class="mono small t-muted">11-20 22:17</td><td><span class="mono small" style="font-weight:500">glm-5.3</span><p class="caption t-muted mono" style="margin-top:2px">glm-official</p></td><td><span class="badge success"><span class="dot"></span>成功</span></td><td class="r num small t-muted">6,650</td><td class="r num small t-muted">3,328</td><td class="r num small t-muted">954</td><td class="r num small" style="font-weight:500">¥0.0218</td></tr></tbody></table></div><div class="pager"><span>共 46 条 · 第 1 / 5 页</span><div class="pages"><span class="pg" style="background:var(--ink);color:var(--accent-ink);min-width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:3px">1</span><span class="pg" style="min-width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center">2</span><span class="pg" style="min-width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center">3</span></div></div></div></main></div></div>`);
+    const p_ledger = addPage(4120, bandBY + 26, 1280, 800, '控制台 · 账单', `<div class="rp"><div class="shell"><aside class="sidebar"><div class="brand"><span class="name">Margin</span></div><nav aria-label="控制台"><div class="navgroup"><span class="eyebrow">广场</span><button class="navitem"><span class="t">模型广场</span></button><button class="navitem"><span class="t">API 文档</span></button></div><div class="navgroup"><span class="eyebrow">控制台</span><button class="navitem"><span class="t">概览</span></button><button class="navitem"><span class="t">API Keys</span></button><button class="navitem"><span class="t">用量</span></button><button class="navitem" aria-current="page"><span class="t">账单</span></button><button class="navitem"><span class="t">额度充值</span></button></div></nav><div class="account"><span class="avatar">U</span><div class="who"><p class="nm">Ulan</p><p class="bal">余额 <span class="num">¥2,008.63</span></p></div></div></aside><main class="main"><div class="content"><header class="pagehead"><div class="row"><div><p class="eyebrow">控制台</p><h1 class="h1" style="margin-top:6px">账单</h1><p class="desc">余额变动明细，按时间倒序分页展示。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span></div></div></header><div class="card"><table class="ledger-table"><thead><tr><th>时间</th><th>类型</th><th class="r">变动</th></tr></thead><tbody><tr><td class="mono small t-muted">11-21 15:32</td><td>调用扣费<p class="caption t-muted" style="margin-top:2px">当日全部调用汇总</p></td><td class="r num small" style="font-weight:500;color:var(--danger)">-¥2.60</td></tr><tr><td class="mono small t-muted">11-20 10:02</td><td>调用扣费<p class="caption t-muted" style="margin-top:2px">当日全部调用汇总</p></td><td class="r num small" style="font-weight:500;color:var(--danger)">-¥2.10</td></tr><tr><td class="mono small t-muted">11-19 09:44</td><td>调用扣费<p class="caption t-muted" style="margin-top:2px">当日全部调用汇总</p></td><td class="r num small" style="font-weight:500;color:var(--danger)">-¥0.80</td></tr><tr><td class="mono small t-muted">11-12 10:02</td><td>充值到账</td><td class="r num small" style="font-weight:500;color:var(--success)">+¥40.00</td></tr><tr><td class="mono small t-muted">11-01 09:15</td><td>新人体验额度</td><td class="r num small" style="font-weight:500;color:var(--success)">+¥1.00</td></tr></tbody></table></div><div class="pager"><span>共 32 条 · 第 1 / 3 页</span><div class="pages"></div></div></div></main></div></div>`);
+    const p_billing = addPage(5460, bandBY + 26, 1280, 800, '控制台 · 额度充值', `<div class="rp"><div class="shell"><aside class="sidebar"><div class="brand"><span class="name">Margin</span></div><nav aria-label="控制台"><div class="navgroup"><span class="eyebrow">广场</span><button class="navitem"><span class="t">模型广场</span></button><button class="navitem"><span class="t">API 文档</span></button></div><div class="navgroup"><span class="eyebrow">控制台</span><button class="navitem"><span class="t">概览</span></button><button class="navitem"><span class="t">API Keys</span></button><button class="navitem"><span class="t">用量</span></button><button class="navitem"><span class="t">账单</span></button><button class="navitem" aria-current="page"><span class="t">额度充值</span></button></div></nav><div class="account"><span class="avatar">U</span><div class="who"><p class="nm">Ulan</p><p class="bal">余额 <span class="num">¥2,008.63</span></p></div></div></aside><main class="main"><div class="content"><header class="pagehead"><div class="row"><div><p class="eyebrow">控制台</p><h1 class="h1" style="margin-top:6px">额度充值</h1><p class="desc">余额按调用实际用量扣减。首次进入会自动获得 ¥1 体验额度。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span></div></div></header><div class="balance-strip"><div><p class="eyebrow">当前可用余额</p><p class="big">¥2,008.63</p></div><div style="text-align:right"><p class="caption t-muted">总余额 / 已预留</p><p class="num small" style="margin-top:5px;font-size:14px">¥2,009.12 / ¥0.49</p></div></div><div class="sect"><div class="secthead"><h2>选择额度包</h2></div><div class="packs" style="margin-top:16px"><button class="pack"><p class="amt">¥8</p><p class="per">入门额度<br>支付 ¥8.00 · 到账 ¥8.00</p></button><button class="pack" aria-pressed="true"><p class="amt">¥40</p><p class="per">开发额度<br>支付 ¥40.00 · 到账 ¥40.00</p></button><button class="pack"><p class="amt">¥160</p><p class="per">长期额度<br>支付 ¥160.00 · 到账 ¥160.00</p></button></div><div style="display:flex;align-items:center;gap:14px;margin-top:18px"><button class="btn">申请充值</button><p class="caption t-muted">生成 5 分钟内有效的申请码，发送给管理员确认后即时到账。</p></div></div><div class="sect"><div class="secthead"><h2>充值流程</h2></div><div class="steps" style="margin-top:16px"><div class="st"><p class="no">01</p><p class="tt">选择额度包，点击「申请充值」</p><p class="dd">系统生成一个 5 分钟内有效的申请码。</p></div><div class="st"><p class="no">02</p><p class="tt">把申请码发送给管理员</p><p class="dd">在微信里把码发给管理员，并说明需要的额度包。</p></div><div class="st"><p class="no">03</p><p class="tt">管理员确认后自动到账</p><p class="dd">管理员核对收款后在后台确认，额度即时写入你的钱包。</p></div></div></div></div></main></div></div>`);
+    const bandCY1 = Math.max(p_overview.offsetTop + p_overview.offsetHeight, p_keys.offsetTop + p_keys.offsetHeight, p_usage.offsetTop + p_usage.offsetHeight, p_ledger.offsetTop + p_ledger.offsetHeight, p_billing.offsetTop + p_billing.offsetHeight) + 90;
+    addText(100, bandCY1, '运营后台 · 管理组十屏，台账密度 + 审计口径', { fontSize: 13, color: 'var(--accent)', maxWidth: 620 });
+    const p_a_overview = addPage(100, bandCY1 + 26, 1280, 800, '运营概览', `<div class="rp"><div class="shell"><aside class="sidebar"><div class="brand"><span class="name">Margin</span></div><nav aria-label="控制台"><div class="navgroup"><span class="eyebrow">广场</span><button class="navitem"><span class="t">模型广场</span></button><button class="navitem"><span class="t">API 文档</span></button></div><div class="navgroup"><span class="eyebrow">控制台</span><button class="navitem"><span class="t">概览</span></button><button class="navitem"><span class="t">API Keys</span></button><button class="navitem"><span class="t">用量</span></button><button class="navitem"><span class="t">账单</span></button><button class="navitem"><span class="t">额度充值</span></button></div><div class="navgroup"><span class="eyebrow">管理</span><button class="navitem" aria-current="page"><span class="t">运营概览</span></button><button class="navitem"><span class="t">模型与价格</span></button><button class="navitem"><span class="t">渠道与路由</span></button><button class="navitem"><span class="t">用户与余额</span></button><button class="navitem"><span class="t">额度管理</span></button><button class="navitem"><span class="t">毛利报表</span></button><button class="navitem"><span class="t">充值订单</span></button><button class="navitem"><span class="t">调用与账本</span></button><button class="navitem"><span class="t">运营调整</span></button><button class="navitem"><span class="t">全部 Token</span></button></div></nav><div class="account"><span class="avatar">U</span><div class="who"><p class="nm">Ulan</p><p class="bal">余额 <span class="num">¥2,008.63</span></p></div></div></aside><main class="main"><div class="content wide"><div class="pagehead"><div class="row"><div><p class="eyebrow">管理后台</p><h1 class="h1" style="margin-top:6px">运营概览</h1><p class="desc">调用、毛利与渠道健康度总览；毛利 = 收入 − 上游成本。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span></div></div></div>
+<div class="kpis c4"><div class="kpi"><p class="lb">24h 请求</p><p class="v">1,847</p><p class="s">成功率 99.2%</p></div><div class="kpi"><p class="lb">24h 毛利</p><p class="v">¥5.86</p><p class="s">收入 ¥26.42 · 毛利率 22.2%</p></div><div class="kpi"><p class="lb">7 天毛利</p><p class="v">¥38.74</p><p class="s">收入 ¥174.92 · 毛利率 22.2%</p></div><div class="kpi"><p class="lb">7 天请求</p><p class="v">12,466</p><p class="s">成功率 98.8%</p></div></div>
+<div class="banner-danger" style="margin-top:20px"><p style="font-weight:600;color:var(--danger)">1 个渠道模型暂时停止路由</p><p class="small t-muted">，1 个等待重试确认。可在「模型与价格」查看失败原因和下次尝试时间。</p></div>
+<div class="sect"><div class="secthead"><h2>渠道健康度</h2></div><div class="card" style="margin-top:16px"><table class="ledger-table"><thead><tr><th>渠道</th><th>状态</th><th class="r">优先级</th><th class="r">24h 调用</th><th class="r">成功率</th><th class="r">平均延迟</th><th>最近失败</th></tr></thead><tbody><tr><td style="font-weight:500">glm-official</td><td><span class="badge success"><span class="dot"></span>启用</span> <span class="badge warning">1 个模型暂停</span></td><td class="r num small t-muted">P10</td><td class="r num small t-muted">1,847</td><td class="r num small t-muted">99.2%</td><td class="r num small t-muted">412ms</td><td class="mono small t-muted">UPSTREAM_RATE_LIMITED</td></tr></tbody></table></div></div></div></main></div></div>`);
+    const p_a_models = addPage(1440, bandCY1 + 26, 1280, 800, '模型与价格', `<div class="rp"><div class="shell"><aside class="sidebar"><div class="brand"><span class="name">Margin</span></div><nav aria-label="控制台"><div class="navgroup"><span class="eyebrow">广场</span><button class="navitem"><span class="t">模型广场</span></button><button class="navitem"><span class="t">API 文档</span></button></div><div class="navgroup"><span class="eyebrow">控制台</span><button class="navitem"><span class="t">概览</span></button><button class="navitem"><span class="t">API Keys</span></button><button class="navitem"><span class="t">用量</span></button><button class="navitem"><span class="t">账单</span></button><button class="navitem"><span class="t">额度充值</span></button></div><div class="navgroup"><span class="eyebrow">管理</span><button class="navitem"><span class="t">运营概览</span></button><button class="navitem" aria-current="page"><span class="t">模型与价格</span></button><button class="navitem"><span class="t">渠道与路由</span></button><button class="navitem"><span class="t">用户与余额</span></button><button class="navitem"><span class="t">额度管理</span></button><button class="navitem"><span class="t">毛利报表</span></button><button class="navitem"><span class="t">充值订单</span></button><button class="navitem"><span class="t">调用与账本</span></button><button class="navitem"><span class="t">运营调整</span></button><button class="navitem"><span class="t">全部 Token</span></button></div></nav><div class="account"><span class="avatar">U</span><div class="who"><p class="nm">Ulan</p><p class="bal">余额 <span class="num">¥2,008.63</span></p></div></div></aside><main class="main"><div class="content wide"><div class="pagehead"><div class="row"><div><p class="eyebrow">管理后台</p><h1 class="h1" style="margin-top:6px">模型与价格</h1><p class="desc">公开目录的价目、上下文与推理强度；保存立即生效并写入审计。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span></div></div></div>
+<div class="card"><table class="ledger-table"><thead><tr><th>模型</th><th class="r">输入 / 1K</th><th class="r">输出 / 1K</th><th class="r">缓存读 / 1K</th><th class="r">上下文</th><th>推理强度</th><th>状态</th></tr></thead><tbody>
+<tr><td><span class="mono small" style="font-weight:500">glm-5.3</span> <span class="badge">推荐</span></td><td class="r num small">¥0.0020</td><td class="r num small">¥0.0080</td><td class="r num small t-muted">¥0.0010</td><td class="r num small t-muted">1,024,000</td><td class="small t-muted">low · medium · high</td><td><span class="badge success"><span class="dot"></span>上架</span></td></tr>
+<tr><td><span class="mono small" style="font-weight:500">glm-5.3-flash</span></td><td class="r num small">¥0.0002</td><td class="r num small">¥0.0008</td><td class="r num small t-muted">¥0.0001</td><td class="r num small t-muted">1,300,000</td><td class="small t-muted">low · medium · high</td><td><span class="badge success"><span class="dot"></span>上架</span></td></tr>
+</tbody></table></div></div></main></div></div>`);
+    const p_a_channels = addPage(2780, bandCY1 + 26, 1280, 800, '渠道与路由', `<div class="rp"><div class="shell"><aside class="sidebar"><div class="brand"><span class="name">Margin</span></div><nav aria-label="控制台"><div class="navgroup"><span class="eyebrow">广场</span><button class="navitem"><span class="t">模型广场</span></button><button class="navitem"><span class="t">API 文档</span></button></div><div class="navgroup"><span class="eyebrow">控制台</span><button class="navitem"><span class="t">概览</span></button><button class="navitem"><span class="t">API Keys</span></button><button class="navitem"><span class="t">用量</span></button><button class="navitem"><span class="t">账单</span></button><button class="navitem"><span class="t">额度充值</span></button></div><div class="navgroup"><span class="eyebrow">管理</span><button class="navitem"><span class="t">运营概览</span></button><button class="navitem"><span class="t">模型与价格</span></button><button class="navitem" aria-current="page"><span class="t">渠道与路由</span></button><button class="navitem"><span class="t">用户与余额</span></button><button class="navitem"><span class="t">额度管理</span></button><button class="navitem"><span class="t">毛利报表</span></button><button class="navitem"><span class="t">充值订单</span></button><button class="navitem"><span class="t">调用与账本</span></button><button class="navitem"><span class="t">运营调整</span></button><button class="navitem"><span class="t">全部 Token</span></button></div></nav><div class="account"><span class="avatar">U</span><div class="who"><p class="nm">Ulan</p><p class="bal">余额 <span class="num">¥2,008.63</span></p></div></div></aside><main class="main"><div class="content wide"><div class="pagehead"><div class="row"><div><p class="eyebrow">管理后台</p><h1 class="h1" style="margin-top:6px">渠道与路由</h1><p class="desc">上游渠道、模型映射、成本与执行倍率。「测试」发起双段探测。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span><button class="btn">添加渠道</button></div></div></div>
+<div class="card"><table class="ledger-table"><thead><tr><th>渠道</th><th class="r">优先级</th><th>模型映射</th><th class="r">成本 / 1K</th><th class="r">执行倍率</th><th>状态</th><th class="r">操作</th></tr></thead><tbody>
+<tr><td><p style="font-weight:500">glm-official</p><p class="mono small t-muted">https://open.bigmodel.cn/api/paas/v4</p><p class="testline">推理连通 (412ms · glm-5.3)</p></td><td class="r num small t-muted">P10</td><td class="mono small t-muted">glm-5.3 · glm-5.3-flash</td><td class="r num small t-muted">¥0.0016 / ¥0.0064</td><td class="r num small t-muted">×1</td><td><span class="badge success"><span class="dot"></span>启用</span></td><td class="r small t-muted">测试 · 编辑</td></tr>
+</tbody></table></div></div></main></div></div>`);
+    const p_a_users = addPage(4120, bandCY1 + 26, 1280, 800, '用户与余额', `<div class="rp"><div class="shell"><aside class="sidebar"><div class="brand"><span class="name">Margin</span></div><nav aria-label="控制台"><div class="navgroup"><span class="eyebrow">广场</span><button class="navitem"><span class="t">模型广场</span></button><button class="navitem"><span class="t">API 文档</span></button></div><div class="navgroup"><span class="eyebrow">控制台</span><button class="navitem"><span class="t">概览</span></button><button class="navitem"><span class="t">API Keys</span></button><button class="navitem"><span class="t">用量</span></button><button class="navitem"><span class="t">账单</span></button><button class="navitem"><span class="t">额度充值</span></button></div><div class="navgroup"><span class="eyebrow">管理</span><button class="navitem"><span class="t">运营概览</span></button><button class="navitem"><span class="t">模型与价格</span></button><button class="navitem"><span class="t">渠道与路由</span></button><button class="navitem" aria-current="page"><span class="t">用户与余额</span></button><button class="navitem"><span class="t">额度管理</span></button><button class="navitem"><span class="t">毛利报表</span></button><button class="navitem"><span class="t">充值订单</span></button><button class="navitem"><span class="t">调用与账本</span></button><button class="navitem"><span class="t">运营调整</span></button><button class="navitem"><span class="t">全部 Token</span></button></div></nav><div class="account"><span class="avatar">U</span><div class="who"><p class="nm">Ulan</p><p class="bal">余额 <span class="num">¥2,008.63</span></p></div></div></aside><main class="main"><div class="content wide"><div class="pagehead"><div class="row"><div><p class="eyebrow">管理后台</p><h1 class="h1" style="margin-top:6px">用户与余额</h1><p class="desc">全部账号的余额与 API Key 情况。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span></div></div></div>
+<div class="card"><table class="ledger-table"><thead><tr><th>用户</th><th class="r">可用余额</th><th class="r">活跃 Key</th><th class="r">最近调用</th></tr></thead><tbody>
+<tr><td><p style="font-weight:500">Ulan</p><p class="mono small t-muted">ulan@zmzai.cloud</p></td><td class="r"><span class="badge success">¥2,008.63</span></td><td class="r num small t-muted">2</td><td class="r small t-muted">刚刚</td></tr>
+<tr><td><p style="font-weight:500">阿岚</p><p class="mono small t-muted">alan@example.com</p></td><td class="r"><span class="badge">¥0.00</span></td><td class="r num small t-muted">1</td><td class="r small t-muted">2 小时前</td></tr>
+<tr><td><p style="font-weight:500">陈默</p><p class="mono small t-muted">chen@example.com</p></td><td class="r"><span class="badge success">¥128.40</span></td><td class="r num small t-muted">3</td><td class="r small t-muted">昨天</td></tr>
+<tr><td><p style="font-weight:500">小鱼</p><p class="mono small t-muted">yu@example.com</p></td><td class="r"><span class="badge success">¥2.15</span></td><td class="r num small t-muted">1</td><td class="r small t-muted">3 天前</td></tr>
+</tbody></table></div></div></main></div></div>`);
+    const p_a_wallet = addPage(5460, bandCY1 + 26, 1280, 800, '额度管理', `<div class="rp"><div class="shell"><aside class="sidebar"><div class="brand"><span class="name">Margin</span></div><nav aria-label="控制台"><div class="navgroup"><span class="eyebrow">广场</span><button class="navitem"><span class="t">模型广场</span></button><button class="navitem"><span class="t">API 文档</span></button></div><div class="navgroup"><span class="eyebrow">控制台</span><button class="navitem"><span class="t">概览</span></button><button class="navitem"><span class="t">API Keys</span></button><button class="navitem"><span class="t">用量</span></button><button class="navitem"><span class="t">账单</span></button><button class="navitem"><span class="t">额度充值</span></button></div><div class="navgroup"><span class="eyebrow">管理</span><button class="navitem"><span class="t">运营概览</span></button><button class="navitem"><span class="t">模型与价格</span></button><button class="navitem"><span class="t">渠道与路由</span></button><button class="navitem"><span class="t">用户与余额</span></button><button class="navitem" aria-current="page"><span class="t">额度管理</span></button><button class="navitem"><span class="t">毛利报表</span></button><button class="navitem"><span class="t">充值订单</span></button><button class="navitem"><span class="t">调用与账本</span></button><button class="navitem"><span class="t">运营调整</span></button><button class="navitem"><span class="t">全部 Token</span></button></div></nav><div class="account"><span class="avatar">U</span><div class="who"><p class="nm">Ulan</p><p class="bal">余额 <span class="num">¥2,008.63</span></p></div></div></aside><main class="main"><div class="content wide"><div class="pagehead"><div class="row"><div><p class="eyebrow">管理后台</p><h1 class="h1" style="margin-top:6px">额度管理</h1><p class="desc">管理员自助划拨 / 补充额度。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span></div></div></div>
+<div class="two-col"><div class="poolcard"><p class="eyebrow">admin 资金池</p><p class="big">¥2,008.63</p><dl><div><dt>可划拨</dt><dd>¥2,008.14</dd></div><div><dt>已预留</dt><dd>¥0.49</dd></div></dl><p class="small t-muted">资金池就是你（ulan@zmzai.cloud）的账户余额。划拨给别人从这里扣；补自己的额度用「直接授信」。</p><p class="mono small t-muted" style="margin-top:14px;border:1px solid var(--line);background:var(--surface);border-radius:3px;padding:9px 12px">记账单位：1,000,000 micros = ¥8.00</p></div>
+<div class="card pad"><p class="h3">额度操作</p><div class="radio-row" style="margin-top:14px"><label><input type="radio" checked>划拨（从资金池扣）</label><label><input type="radio">直接授信（不动资金池）</label></div><div style="display:grid;gap:14px;margin-top:16px"><div><p class="lb" style="font-size:13px;font-weight:500;margin-bottom:6px">目标用户</p><p class="input" style="display:flex;align-items:center;color:var(--ink-2)">阿岚 · alan@example.com</p></div><div><p class="lb" style="font-size:13px;font-weight:500;margin-bottom:6px">金额（人民币元）</p><p class="input mono" style="display:flex;align-items:center">40.00</p><p class="hint mono">= 5,000,000 micros · 划拨后资金池 ¥1,968.63</p></div><div><p class="lb" style="font-size:13px;font-weight:500;margin-bottom:6px">操作原因</p><p class="input" style="display:flex;align-items:center;color:var(--ink-2)">微信收款 ¥40 对应额度包</p></div><div><span class="btn" style="display:inline-flex;align-items:center">确认划拨</span></div></div></div></div></div></main></div></div>`);
+    const bandCY2 = Math.max(p_a_overview.offsetTop + p_a_overview.offsetHeight, p_a_models.offsetTop + p_a_models.offsetHeight, p_a_channels.offsetTop + p_a_channels.offsetHeight, p_a_users.offsetTop + p_a_users.offsetHeight, p_a_wallet.offsetTop + p_a_wallet.offsetHeight) + 90;
+    addText(100, bandCY2, '运营后台（续）', { fontSize: 13, color: 'var(--accent)', maxWidth: 620 });
+    const p_a_profit = addPage(100, bandCY2 + 26, 1280, 800, '毛利报表', `<div class="rp"><div class="shell"><aside class="sidebar"><div class="brand"><span class="name">Margin</span></div><nav aria-label="控制台"><div class="navgroup"><span class="eyebrow">广场</span><button class="navitem"><span class="t">模型广场</span></button><button class="navitem"><span class="t">API 文档</span></button></div><div class="navgroup"><span class="eyebrow">控制台</span><button class="navitem"><span class="t">概览</span></button><button class="navitem"><span class="t">API Keys</span></button><button class="navitem"><span class="t">用量</span></button><button class="navitem"><span class="t">账单</span></button><button class="navitem"><span class="t">额度充值</span></button></div><div class="navgroup"><span class="eyebrow">管理</span><button class="navitem"><span class="t">运营概览</span></button><button class="navitem"><span class="t">模型与价格</span></button><button class="navitem"><span class="t">渠道与路由</span></button><button class="navitem"><span class="t">用户与余额</span></button><button class="navitem"><span class="t">额度管理</span></button><button class="navitem" aria-current="page"><span class="t">毛利报表</span></button><button class="navitem"><span class="t">充值订单</span></button><button class="navitem"><span class="t">调用与账本</span></button><button class="navitem"><span class="t">运营调整</span></button><button class="navitem"><span class="t">全部 Token</span></button></div></nav><div class="account"><span class="avatar">U</span><div class="who"><p class="nm">Ulan</p><p class="bal">余额 <span class="num">¥2,008.63</span></p></div></div></aside><main class="main"><div class="content wide"><div class="pagehead"><div class="row"><div><p class="eyebrow">管理后台</p><h1 class="h1" style="margin-top:6px">毛利报表</h1><p class="desc">按模型 / 渠道聚合的收入、成本与毛利。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span><div class="chips"><span class="chip" style="pointer-events:none;background:var(--ink);color:var(--accent-ink)">最近 7 天</span><span class="chip" style="pointer-events:none">最近 30 天</span></div></div></div></div>
+<div class="kpis c4"><div class="kpi"><p class="lb">收入</p><p class="v">¥174.92</p></div><div class="kpi"><p class="lb">成本</p><p class="v">¥136.18</p></div><div class="kpi"><p class="lb">毛利</p><p class="v profit-pos">¥38.74</p></div><div class="kpi"><p class="lb">毛利率</p><p class="v profit-pos">22.2%</p></div></div>
+<div class="sect"><div class="secthead"><h2>按模型</h2></div><div class="card" style="margin-top:16px"><table class="ledger-table"><thead><tr><th>模型</th><th class="r">调用</th><th class="r">收入</th><th class="r">成本</th><th class="r">毛利</th><th class="r">毛利率</th></tr></thead><tbody>
+<tr><td class="mono small">glm-5.3</td><td class="r num small t-muted">5,752</td><td class="r num small">¥142.35</td><td class="r num small t-muted">¥110.83</td><td class="r num small profit-pos">¥31.52</td><td class="r num small profit-pos">22.1%</td></tr>
+<tr><td class="mono small">glm-5.3-flash</td><td class="r num small t-muted">2,730</td><td class="r num small">¥32.57</td><td class="r num small t-muted">¥25.39</td><td class="r num small profit-pos">¥7.18</td><td class="r num small profit-pos">22.0%</td></tr>
+</tbody></table></div></div></div></main></div></div>`);
+    const p_a_orders = addPage(1440, bandCY2 + 26, 1280, 800, '充值订单', `<div class="rp"><div class="shell"><aside class="sidebar"><div class="brand"><span class="name">Margin</span></div><nav aria-label="控制台"><div class="navgroup"><span class="eyebrow">广场</span><button class="navitem"><span class="t">模型广场</span></button><button class="navitem"><span class="t">API 文档</span></button></div><div class="navgroup"><span class="eyebrow">控制台</span><button class="navitem"><span class="t">概览</span></button><button class="navitem"><span class="t">API Keys</span></button><button class="navitem"><span class="t">用量</span></button><button class="navitem"><span class="t">账单</span></button><button class="navitem"><span class="t">额度充值</span></button></div><div class="navgroup"><span class="eyebrow">管理</span><button class="navitem"><span class="t">运营概览</span></button><button class="navitem"><span class="t">模型与价格</span></button><button class="navitem"><span class="t">渠道与路由</span></button><button class="navitem"><span class="t">用户与余额</span></button><button class="navitem"><span class="t">额度管理</span></button><button class="navitem"><span class="t">毛利报表</span></button><button class="navitem" aria-current="page"><span class="t">充值订单</span></button><button class="navitem"><span class="t">调用与账本</span></button><button class="navitem"><span class="t">运营调整</span></button><button class="navitem"><span class="t">全部 Token</span></button></div></nav><div class="account"><span class="avatar">U</span><div class="who"><p class="nm">Ulan</p><p class="bal">余额 <span class="num">¥2,008.63</span></p></div></div></aside><main class="main"><div class="content wide"><div class="pagehead"><div class="row"><div><p class="eyebrow">管理后台</p><h1 class="h1" style="margin-top:6px">充值订单</h1><p class="desc">以微信 / 支付宝实际到账记录为准，确认后立即增加用户余额。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span></div></div></div>
+<div class="card" style="margin-top:4px"><div class="orderrow"><div class="top"><div><p class="mono small" style="font-weight:500">ORD-20261121-007</p><p class="small" style="margin-top:3px">阿岚 · alan@example.com</p></div><span class="badge warning"><span class="dot"></span>待确认</span></div><p class="mono small t-muted" style="margin-top:8px">申请码 RC-7F3K2Q · 收款 ¥40.00 · 到账 ¥40.00 · 码有效期至 15:55</p><p class="caption t-muted" style="margin-top:5px">付款人：阿岚 · 微信转账</p><div style="display:flex;gap:10px;margin-top:12px"><span class="btn sm" style="display:inline-flex;align-items:center">确认收款并开通</span><span class="btn sm danger-ghost" style="display:inline-flex;align-items:center">驳回申请</span></div></div>
+<div class="orderrow"><div class="top"><div><p class="mono small" style="font-weight:500">ORD-20261120-014</p><p class="small" style="margin-top:3px">陈默 · chen@example.com</p></div><span class="badge success"><span class="dot"></span>已确认收款</span></div><p class="mono small t-muted" style="margin-top:8px">申请码 RC-2W9XTN · 收款 ¥160.00 · 到账 ¥160.00</p><p class="caption t-muted" style="margin-top:10px">审核备注：微信已核对</p></div></div></div></main></div></div>`);
+    const p_a_activity = addPage(2780, bandCY2 + 26, 1280, 800, '调用与账本', `<div class="rp"><div class="shell"><aside class="sidebar"><div class="brand"><span class="name">Margin</span></div><nav aria-label="控制台"><div class="navgroup"><span class="eyebrow">广场</span><button class="navitem"><span class="t">模型广场</span></button><button class="navitem"><span class="t">API 文档</span></button></div><div class="navgroup"><span class="eyebrow">控制台</span><button class="navitem"><span class="t">概览</span></button><button class="navitem"><span class="t">API Keys</span></button><button class="navitem"><span class="t">用量</span></button><button class="navitem"><span class="t">账单</span></button><button class="navitem"><span class="t">额度充值</span></button></div><div class="navgroup"><span class="eyebrow">管理</span><button class="navitem"><span class="t">运营概览</span></button><button class="navitem"><span class="t">模型与价格</span></button><button class="navitem"><span class="t">渠道与路由</span></button><button class="navitem"><span class="t">用户与余额</span></button><button class="navitem"><span class="t">额度管理</span></button><button class="navitem"><span class="t">毛利报表</span></button><button class="navitem"><span class="t">充值订单</span></button><button class="navitem" aria-current="page"><span class="t">调用与账本</span></button><button class="navitem"><span class="t">运营调整</span></button><button class="navitem"><span class="t">全部 Token</span></button></div></nav><div class="account"><span class="avatar">U</span><div class="who"><p class="nm">Ulan</p><p class="bal">余额 <span class="num">¥2,008.63</span></p></div></div></aside><main class="main"><div class="content wide"><div class="pagehead"><div class="row"><div><p class="eyebrow">管理后台</p><h1 class="h1" style="margin-top:6px">调用与账本</h1><p class="desc">全站最近的调用、渠道尝试与余额流水。待核查上游成本：2 笔。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span></div></div></div>
+<div class="banner-danger" style="margin-top:4px"><p style="font-weight:600;color:var(--danger)">待核查成本 2 笔</p><p class="small t-muted"> — completed+unknown 是真实发生但未记成本的上游支出；failed+unknown 是网络异常中断（无成本）。</p></div>
+<div class="card" style="margin-top:16px"><table class="ledger-table"><thead><tr><th>时间</th><th>用户</th><th>模型 / 渠道</th><th>状态</th><th class="r">费用</th><th class="r">上游成本</th></tr></thead><tbody>
+<tr><td class="mono small t-muted">11-21 15:32</td><td class="small">Ulan</td><td><span class="mono small" style="font-weight:500">glm-5.3</span><p class="caption t-muted mono" style="margin-top:2px">glm-official</p></td><td><span class="badge success"><span class="dot"></span>成功</span></td><td class="r num small" style="font-weight:500">¥0.0172</td><td class="r num small t-muted">¥0.0134</td></tr>
+<tr><td class="mono small t-muted">11-21 12:40</td><td class="small">小鱼</td><td><span class="mono small" style="font-weight:500">glm-5.3-flash</span><p class="caption t-muted mono" style="margin-top:2px">glm-official</p></td><td><span class="badge success"><span class="dot"></span>成功</span><p class="caption" style="color:var(--warning);margin-top:3px">成本待核查</p></td><td class="r num small" style="font-weight:500">¥0.0012</td><td class="r num small t-muted">—</td></tr>
+<tr><td class="mono small t-muted">11-21 13:58</td><td class="small">Ulan</td><td><span class="mono small" style="font-weight:500">glm-5.3</span><p class="caption t-muted mono" style="margin-top:2px">glm-official</p></td><td><span class="badge danger"><span class="dot"></span>失败</span></td><td class="r num small" style="font-weight:500">¥0.00</td><td class="r num small t-muted">—</td></tr>
+</tbody></table></div></div></main></div></div>`);
+    const p_a_operations = addPage(4120, bandCY2 + 26, 1280, 800, '运营调整', `<div class="rp"><div class="shell"><aside class="sidebar"><div class="brand"><span class="name">Margin</span></div><nav aria-label="控制台"><div class="navgroup"><span class="eyebrow">广场</span><button class="navitem"><span class="t">模型广场</span></button><button class="navitem"><span class="t">API 文档</span></button></div><div class="navgroup"><span class="eyebrow">控制台</span><button class="navitem"><span class="t">概览</span></button><button class="navitem"><span class="t">API Keys</span></button><button class="navitem"><span class="t">用量</span></button><button class="navitem"><span class="t">账单</span></button><button class="navitem"><span class="t">额度充值</span></button></div><div class="navgroup"><span class="eyebrow">管理</span><button class="navitem"><span class="t">运营概览</span></button><button class="navitem"><span class="t">模型与价格</span></button><button class="navitem"><span class="t">渠道与路由</span></button><button class="navitem"><span class="t">用户与余额</span></button><button class="navitem"><span class="t">额度管理</span></button><button class="navitem"><span class="t">毛利报表</span></button><button class="navitem"><span class="t">充值订单</span></button><button class="navitem"><span class="t">调用与账本</span></button><button class="navitem" aria-current="page"><span class="t">运营调整</span></button><button class="navitem"><span class="t">全部 Token</span></button></div></nav><div class="account"><span class="avatar">U</span><div class="who"><p class="nm">Ulan</p><p class="bal">余额 <span class="num">¥2,008.63</span></p></div></div></aside><main class="main"><div class="content wide"><div class="pagehead"><div class="row"><div><p class="eyebrow">管理后台</p><h1 class="h1" style="margin-top:6px">运营调整</h1><p class="desc">直接调价与调额，全部写入审计日志。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span></div></div></div>
+<div class="two-col"><div class="card pad"><p class="h3">公开价目</p><p class="small t-muted" style="margin-top:6px">表单按元 / 1M 录入，保存后换算为元 / 1K 存储。</p><div style="display:grid;gap:14px;margin-top:16px"><div><p class="lb" style="font-size:13px;font-weight:500;margin-bottom:6px">模型名</p><p class="input mono" style="display:flex;align-items:center;color:var(--ink-2)">glm-5.4</p></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><p class="lb" style="font-size:13px;font-weight:500;margin-bottom:6px">输入（元/1M）</p><p class="input mono" style="display:flex;align-items:center">2.0000</p></div><div><p class="lb" style="font-size:13px;font-weight:500;margin-bottom:6px">输出（元/1M）</p><p class="input mono" style="display:flex;align-items:center">8.0000</p></div></div><div><p class="lb" style="font-size:13px;font-weight:500;margin-bottom:6px">调价原因</p><p class="input" style="display:flex;align-items:center;color:var(--ink-2)">上游调价跟进</p></div><div><span class="btn" style="display:inline-flex;align-items:center">保存价目</span></div></div></div>
+<div class="card pad"><p class="h3">余额调整</p><p class="small t-muted" style="margin-top:6px">直接给用户加款 / 扣款，不动 admin 资金池。</p><div style="display:grid;gap:14px;margin-top:16px"><div><p class="lb" style="font-size:13px;font-weight:500;margin-bottom:6px">目标用户</p><p class="input" style="display:flex;align-items:center;color:var(--ink-2)">小鱼 · yu@example.com</p></div><div><p class="lb" style="font-size:13px;font-weight:500;margin-bottom:6px">金额（负数为扣款）</p><p class="input mono" style="display:flex;align-items:center">-2.00</p></div><div><p class="lb" style="font-size:13px;font-weight:500;margin-bottom:6px">调整原因</p><p class="input" style="display:flex;align-items:center;color:var(--ink-2)">冲正多充</p></div><div><span class="btn" style="display:inline-flex;align-items:center">调整余额</span></div></div></div></div></div></main></div></div>`);
+    const p_a_keys = addPage(5460, bandCY2 + 26, 1280, 800, '全部 Token', `<div class="rp"><div class="shell"><aside class="sidebar"><div class="brand"><span class="name">Margin</span></div><nav aria-label="控制台"><div class="navgroup"><span class="eyebrow">广场</span><button class="navitem"><span class="t">模型广场</span></button><button class="navitem"><span class="t">API 文档</span></button></div><div class="navgroup"><span class="eyebrow">控制台</span><button class="navitem"><span class="t">概览</span></button><button class="navitem"><span class="t">API Keys</span></button><button class="navitem"><span class="t">用量</span></button><button class="navitem"><span class="t">账单</span></button><button class="navitem"><span class="t">额度充值</span></button></div><div class="navgroup"><span class="eyebrow">管理</span><button class="navitem"><span class="t">运营概览</span></button><button class="navitem"><span class="t">模型与价格</span></button><button class="navitem"><span class="t">渠道与路由</span></button><button class="navitem"><span class="t">用户与余额</span></button><button class="navitem"><span class="t">额度管理</span></button><button class="navitem"><span class="t">毛利报表</span></button><button class="navitem"><span class="t">充值订单</span></button><button class="navitem"><span class="t">调用与账本</span></button><button class="navitem"><span class="t">运营调整</span></button><button class="navitem" aria-current="page"><span class="t">全部 Token</span></button></div></nav><div class="account"><span class="avatar">U</span><div class="who"><p class="nm">Ulan</p><p class="bal">余额 <span class="num">¥2,008.63</span></p></div></div></aside><main class="main"><div class="content wide"><div class="pagehead"><div class="row"><div><p class="eyebrow">管理后台</p><h1 class="h1" style="margin-top:6px">全部 Token</h1><p class="desc">所有用户的 API Key；可代为创建、编辑限额或吊销。</p></div><div class="actions"><span class="demo-tag">原型 · 演示数据</span></div></div></div>
+<div class="card"><table class="ledger-table"><thead><tr><th>名称 / 前缀</th><th>用户</th><th class="r">限速</th><th class="r">月上限 / 已用</th><th>状态</th></tr></thead><tbody>
+<tr><td><p style="font-weight:500;font-size:14px">阿岚-本地</p><p class="mono small t-muted" style="margin-top:3px">zrk_al2p…</p></td><td class="small">阿岚</td><td class="r num small t-muted">60/min</td><td class="r num small t-muted">不限</td><td><span class="badge success"><span class="dot"></span>启用</span></td></tr>
+<tr><td><p style="font-weight:500;font-size:14px">陈默-生产</p><p class="mono small t-muted" style="margin-top:3px">zrk_cm8s…</p></td><td class="small">陈默</td><td class="r num small t-muted">120/min</td><td class="r num small t-muted">¥500 / ¥212.40</td><td><span class="badge success"><span class="dot"></span>启用</span></td></tr>
+<tr><td><p style="font-weight:500;font-size:14px">小鱼-试用</p><p class="mono small t-muted" style="margin-top:3px">zrk_yu5d…</p></td><td class="small">小鱼</td><td class="r num small t-muted">20/min</td><td class="r num small t-muted">¥10 / ¥1.20</td><td><span class="badge success"><span class="dot"></span>启用</span></td></tr>
+</tbody></table></div></div></main></div></div>`);
+  }
+
+  initScene();
+
+  const r = viewport.getBoundingClientRect();
+  panX = r.width * 0.04;
+  panY = r.height * 0.04;
+  updateTransform();
+})();
+</script>
+</body>
+</html>

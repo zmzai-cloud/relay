@@ -5,9 +5,9 @@ import { PublicShell } from "@/components/public-shell";
 import { getPublicChannels } from "@/providers/catalog/public-models";
 import { connectMongo } from "@/providers/database/mongodb/connection";
 import { getCurrentUser } from "@/providers/auth/session";
+import { apiUrl, loginUrl } from "@/config/site-origin";
 
 export const dynamic = "force-dynamic";
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.zmzai.cloud";
 
 const steps: Array<[string, string]> = [
   ["登录并创建 API Key", "使用 zmzai 账号登录，在控制台创建一个 API Key，新账号自带 ¥1 体验额度。"],
@@ -36,7 +36,7 @@ export default async function HomePage() {
                 <Button>进入控制台</Button>
               </Link>
             ) : (
-              <Link href={`${AUTH_URL}/login?next=${encodeURIComponent("https://m.zmzai.cloud/dashboard")}`}>
+              <Link href={loginUrl("/dashboard")}>
                 <Button>登录开始使用</Button>
               </Link>
             )}
@@ -66,7 +66,7 @@ export default async function HomePage() {
         </ol>
         <div className="mt-6">
           <Terminal title="curl — chat completions">
-            <span>{`curl https://m.zmzai.cloud/api/v1/chat/completions \\
+            <span>{`curl ${apiUrl("/api/v1/chat/completions")} \\
   -H "Authorization: Bearer <YOUR_API_KEY>" \\
   -H "Content-Type: application/json" \\
   -d '{"model":"YOUR_MODEL_ID","messages":[{"role":"user","content":"你好"}]}'`}</span>

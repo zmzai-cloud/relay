@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@zmzai/contracts':
-        specifier: github:zmzai-cloud/zmzai-contracts#main
-        version: https://codeload.github.com/zmzai-cloud/zmzai-contracts/tar.gz/c5c150c6f6d3636a191049e463a87c5a27ac35c5(zod@3.25.76)
       '@zmzai/db':
         specifier: ^0.1.0
         version: 0.1.0(mongoose@8.24.1)
@@ -1009,12 +1006,6 @@ packages:
 
   '@vitest/spy@5.1.0':
     resolution: {integrity: sha512-2DPO5OMHWKrBngC+fCmTQqemNF0gidRhp3lxbBmRhW+M1XJrfgPpqNqWVevXtn2f2ufD5ZaR1B6B641aAlcX5A==}
-
-  '@zmzai/contracts@https://codeload.github.com/zmzai-cloud/zmzai-contracts/tar.gz/c5c150c6f6d3636a191049e463a87c5a27ac35c5':
-    resolution: {gitHosted: true, tarball: https://codeload.github.com/zmzai-cloud/zmzai-contracts/tar.gz/c5c150c6f6d3636a191049e463a87c5a27ac35c5}
-    version: 0.1.0
-    peerDependencies:
-      zod: ^3.25.0
 
   '@zmzai/db@0.1.0':
     resolution: {integrity: sha512-Evf/98xZqxHIunyJwDHEw9CbnxG2JJiafOlXBjOQ1Xg6pSu2liKVXJ21tIb1nBf3ufZYUsWDD+R9+nVdTFD+rg==}
@@ -2831,10 +2822,6 @@ snapshots:
       vite: 8.3.5(@types/node@22.20.1)(jiti@2.7.0)
 
   '@vitest/spy@5.1.0': {}
-
-  '@zmzai/contracts@https://codeload.github.com/zmzai-cloud/zmzai-contracts/tar.gz/c5c150c6f6d3636a191049e463a87c5a27ac35c5(zod@3.25.76)':
-    dependencies:
-      zod: 3.25.76
 
   '@zmzai/db@0.1.0(mongoose@8.24.1)':
     dependencies:

@@ -7,13 +7,13 @@ import { connectMongo } from "@/providers/database/mongodb/connection";
 import { UserModel } from "@zmzai/db";
 import { WalletOrderModel } from "@/providers/database/mongodb/models/wallet-order";
 import { OrderAdminPanel } from "./order-admin-panel";
+import { loginUrl } from "@/config/site-origin";
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.zmzai.cloud";
 export const dynamic = "force-dynamic";
 
 export default async function OrdersPage() {
   const user = await getCurrentUser();
-  if (!user) redirect(`${AUTH_URL}/login?next=${encodeURIComponent("https://m.zmzai.cloud/admin/orders")}`);
+  if (!user) redirect(loginUrl("/admin/orders"));
   if (user.role !== "admin") redirect("/dashboard");
   await connectMongo();
   const orders = await WalletOrderModel.find().sort({ createdAt: -1 }).limit(100).lean();

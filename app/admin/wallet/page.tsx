@@ -6,13 +6,13 @@ import { getCurrentUser } from "@/providers/auth/session";
 import { connectMongo } from "@/providers/database/mongodb/connection";
 import { BalanceAccountModel } from "@/providers/database/mongodb/models/balance";
 import { WalletPanel } from "./wallet-panel";
+import { loginUrl } from "@/config/site-origin";
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.zmzai.cloud";
 export const dynamic = "force-dynamic";
 
 export default async function WalletAdminPage() {
   const user = await getCurrentUser();
-  if (!user) redirect(`${AUTH_URL}/login?next=${encodeURIComponent("https://m.zmzai.cloud/admin/wallet")}`);
+  if (!user) redirect(loginUrl("/admin/wallet"));
   if (user.role !== "admin") redirect("/dashboard");
 
   await connectMongo();

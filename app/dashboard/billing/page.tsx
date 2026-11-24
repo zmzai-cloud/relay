@@ -9,13 +9,13 @@ import { BalanceAccountModel } from "@/providers/database/mongodb/models/balance
 import { ensureWelcomeCredit } from "@/providers/billing/onboarding";
 import { getWalletProducts } from "@/providers/billing/wallet-products";
 import { cnyMicrosLabel } from "@/providers/billing/currency";
+import { loginUrl } from "@/config/site-origin";
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.zmzai.cloud";
 export const dynamic = "force-dynamic";
 
 export default async function BillingPage() {
   const user = await getCurrentUser();
-  if (!user) redirect(`${AUTH_URL}/login?next=${encodeURIComponent("https://m.zmzai.cloud/dashboard/billing")}`);
+  if (!user) redirect(loginUrl("/dashboard/billing"));
   await connectMongo();
   await ensureWelcomeCredit(user.id);
   const account = await BalanceAccountModel.findOne({ userId: user.id }).lean();

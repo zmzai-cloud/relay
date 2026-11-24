@@ -6,13 +6,13 @@ import { connectMongo } from "@/providers/database/mongodb/connection";
 import { ApiKeyModel } from "@/providers/database/mongodb/models/apikey";
 import { ModelPriceModel } from "@/providers/database/mongodb/models/model-price";
 import { TokenPanel } from "../token-panel";
+import { loginUrl } from "@/config/site-origin";
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.zmzai.cloud";
 export const dynamic = "force-dynamic";
 
 export default async function KeysPage() {
   const user = await getCurrentUser();
-  if (!user) redirect(`${AUTH_URL}/login?next=${encodeURIComponent("https://m.zmzai.cloud/dashboard/keys")}`);
+  if (!user) redirect(loginUrl("/dashboard/keys"));
   await connectMongo();
   const [keys, models] = await Promise.all([ApiKeyModel.find({ userId: user.id }).sort({ createdAt: -1 }).lean(), ModelPriceModel.find({ enabled: true }).sort({ model: 1 }).lean()]);
   return (

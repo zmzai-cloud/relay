@@ -10,8 +10,8 @@ import { summarizeModelHealth } from "@/providers/channels/model-routing";
 import { ChannelAttemptModel } from "@/providers/database/mongodb/models/channel-attempt";
 import { UsageModel } from "@/providers/database/mongodb/models/usage";
 import { cnyMicrosLabel } from "@/providers/billing/currency";
+import { loginUrl } from "@/config/site-origin";
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.zmzai.cloud";
 const money = (value: number) => cnyMicrosLabel(value, 2);
 export const dynamic = "force-dynamic";
 
@@ -37,7 +37,7 @@ const profitMargin = (w: UsageWindow) => (w.revenue === 0 ? null : Math.round(((
 
 export default async function AdminPage() {
   const user = await getCurrentUser();
-  if (!user) redirect(`${AUTH_URL}/login?next=${encodeURIComponent("https://m.zmzai.cloud/admin")}`);
+  if (!user) redirect(loginUrl("/admin"));
   if (user.role !== "admin") redirect("/dashboard");
   await connectMongo();
   const since24h = new Date(Date.now() - 86400000);

@@ -7,8 +7,8 @@ import { getCurrentUser } from "@/providers/auth/session";
 import { connectMongo } from "@/providers/database/mongodb/connection";
 import { BalanceLedgerModel } from "@/providers/database/mongodb/models/balance";
 import { cnyMicrosLabel } from "@/providers/billing/currency";
+import { loginUrl } from "@/config/site-origin";
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.zmzai.cloud";
 const PAGE_SIZE = 20;
 const money = (value: number) => cnyMicrosLabel(value);
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ export default async function LedgerPage({
 }) {
   const sp = await searchParams;
   const user = await getCurrentUser();
-  if (!user) redirect(`${AUTH_URL}/login?next=${encodeURIComponent("https://m.zmzai.cloud/dashboard/ledger")}`);
+  if (!user) redirect(loginUrl("/dashboard/ledger"));
   await connectMongo();
   const page = Math.max(1, Number(sp.page) || 1);
   const skip = (page - 1) * PAGE_SIZE;

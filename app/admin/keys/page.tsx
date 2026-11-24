@@ -7,18 +7,18 @@ import { connectMongo } from "@/providers/database/mongodb/connection";
 import { ApiKeyModel } from "@/providers/database/mongodb/models/apikey";
 
 import { KeyAdminPanel } from "./key-admin-panel";
+import { loginUrl } from "@/config/site-origin";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "全部 Token · Relay admin" };
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.zmzai.cloud";
 
 export default async function AdminKeysPage() {
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect(`${AUTH_URL}/login?next=${encodeURIComponent("https://m.zmzai.cloud/admin/keys")}`);
+    redirect(loginUrl("/admin/keys"));
   }
   if (user.role !== "admin") {
     redirect("/dashboard");

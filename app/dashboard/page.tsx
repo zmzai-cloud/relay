@@ -9,8 +9,8 @@ import { BalanceAccountModel } from "@/providers/database/mongodb/models/balance
 import { UsageModel } from "@/providers/database/mongodb/models/usage";
 import { cnyMicrosLabel } from "@/providers/billing/currency";
 import { ensureWelcomeCredit } from "@/providers/billing/onboarding";
+import { loginUrl } from "@/config/site-origin";
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.zmzai.cloud";
 const money = (value: number) => cnyMicrosLabel(value);
 export const dynamic = "force-dynamic";
 
@@ -40,7 +40,7 @@ function formatRelative(date: Date | string): string {
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
-  if (!user) redirect(`${AUTH_URL}/login?next=${encodeURIComponent("https://m.zmzai.cloud/dashboard")}`);
+  if (!user) redirect(loginUrl("/dashboard"));
   await connectMongo();
   await ensureWelcomeCredit(user.id);
   const [account, usage] = await Promise.all([BalanceAccountModel.findOne({ userId: user.id }).lean(), UsageModel.find({ userId: user.id }).sort({ createdAt: -1 }).limit(8).lean()]);
