@@ -1,88 +1,19 @@
-import { cookies } from "next/headers";
+import { getAuthProvider } from "@/providers/auth";
 
-import { getServerEnv, requireAuthSecret } from "@/config/env";
-import { connectMongo } from "@/providers/database/mongodb/connection";
-import {
-  SessionModel,
-  UserModel,
-  hashToken,
-  type UserDocument,
-  type UserRole,
-  type UserStatus,
-} from "@zmzai/db";
+import type { CurrentUser } from "@/providers/auth/session-shape";
 
-export interface CurrentUser {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  status: UserStatus;
-  emailVerified: boolean;
-}
-
-function toAccount(user: UserDocument): CurrentUser {
-  return {
-    id: user._id.toString(),
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    status: user.status,
-    emailVerified: user.emailVerified,
-  };
-}
+export type { CurrentUser, UserRole, UserStatus } from "@/providers/auth/session-shape";
 
 /**
- * 读 muzhi 的 session cookie（跨子域 .zmzai.cloud 共享）→ 校验 → 返回用户。
- * 前提：muzhi 把 SESSION_COOKIE_NAME 的 cookie domain 设为 .zmzai.cloud，
- * 且本服务与 muzhi 同库、同 AUTH_SECRET。
+ * 会话门面（开源化批次 2）：转发到 AUTH_PROVIDER 选定的实现。
+ * 页面与 API 的调用面保持不变；zmzai_sso 行为与原实现逐行一致。
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const env = getServerEnv();
-  const token = (await cookies()).get(env.SESSION_COOKIE_NAME)?.value;
-
-  if (!token) {
-    return null;
-  }
-
-  await connectMongo();
-  const session = await SessionModel.findOne({
-    tokenHash: hashToken(requireAuthSecret(), token),
-    expiresAt: { $gt: new Date() },
-  });
-
-  if (!session) {
-    return null;
-  }
-
-  const user = await UserModel.findById(session.userId);
-  if (
-    !user ||
-    user.status !== "active" ||
-    (!user.emailVerified && user.role !== "admin")
-  ) {
-    return null;
-  }
-
-  return toAccount(user);
+  return getAuthProvider().getCurrentUser();
 }
 
-/** 删除共享会话并清除父域 Cookie，使所有 zmzai 子域同时退出。 */
 export async function destroySession(): Promise<void> {
-  const env = getServerEnv();
-  const cookieStore = await cookies();
-  const token = cookieStore.get(env.SESSION_COOKIE_NAME)?.value;
-  if (token) {
-    await connectMongo();
-    await SessionModel.deleteOne({ tokenHash: hashToken(requireAuthSecret(), token) });
-  }
-  cookieStore.set(env.SESSION_COOKIE_NAME, "", {
-    httpOnly: true,
-    secure: env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    ...(env.SESSION_COOKIE_DOMAIN ? { domain: env.SESSION_COOKIE_DOMAIN } : {}),
-    maxAge: 0,
-  });
+  return getAuthProvider().destroySession();
 }
 
 export class AdminRequiredError extends Error {

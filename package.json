@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.2.2",
     "@zmzai/db": "^0.1.0",
     "@zmzai/theme": "^0.9.10",
     "mongoose": "8.24.1",

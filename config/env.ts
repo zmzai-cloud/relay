@@ -20,6 +20,8 @@ const envSchema = z.object({
     .default("muzhi_session"),
   /** 父域 Cookie，退出时必须以相同作用域清除。 */
   SESSION_COOKIE_DOMAIN: optionalEnvString(),
+  /** 认证提供方（开源化批次 2）：local=本站账号密码；zmzai_sso（默认）=共享会话现状。 */
+  AUTH_PROVIDER: z.enum(["local", "zmzai_sso"]).default("zmzai_sso"),
   /** Relay 管理端额外要求 role=admin **/
   RELAY_DEFAULT_UPSTREAM_TIMEOUT_MS: z.coerce
     .number()
