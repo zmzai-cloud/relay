@@ -1,0 +1,49 @@
+# Relay 自托管（开源化批次 2）：docker compose up -d
+#   1) cp .env.example .env 并填写 AUTH_SECRET / 品牌
+#   2) docker compose up -d && 打开 http://localhost:3000/setup
+# Mongo 以单节点副本集运行——余额核销与 onboarding 发布走事务，需要 replSet。
+services:
+  mongo:
+    image: mongo:8
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'try { quit(db.getSiblingDB(\"admin\").hello().isWritablePrimary ? 0 : 1) } catch (e) { quit(1) }'"]
+      interval: 5s
+      timeout: 4s
+      retries: 24
+      start_period: 10s
+    restart: unless-stopped
+
+  mongo-init:
+    image: mongo:8
+    depends_on:
+      mongo:
+        condition: service_started
+    entrypoint: >
+      bash -c 'for i in $$(seq 1 30); do
+        mongosh mongodb://mongo:27017/?directConnection=true --quiet --eval
+        "try { rs.initiate({_id:\"rs0\",members:[{_id:0,host:\"mongo:27017\"}]}); quit(0) } catch (e) { quit(1) }"
+        && exit 0; sleep 2; done; exit 1'
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      args:
+        # 部署档案按需覆盖（zmzai：https://relay.zmzai.cloud / https://auth.zmzai.cloud）
+        NEXT_PUBLIC_API_ORIGIN: ${NEXT_PUBLIC_API_ORIGIN:-}
+        NEXT_PUBLIC_AUTH_URL: ${NEXT_PUBLIC_AUTH_URL:-}
+    env_file: .env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/relay?replicaSet=rs0
+    ports:
+      - "${RELAY_PORT:-3000}:3000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mongo-data:

@@ -1,4 +1,4 @@
-import { Schema, model } from "mongoose";
+import { model, models, Schema, type Model } from "mongoose";
 
 import { connectMongo } from "@/providers/database/mongodb/connection";
 
@@ -30,5 +30,9 @@ export interface LocalUserDocument {
 
 export async function getLocalUserModel() {
   await connectMongo();
-  return model("LocalUser", LocalUserSchema);
+  // models.X ?? model(...)：防 dev 分包编译下重复注册（OverwriteModelError）
+  return (
+    (models.LocalUser as Model<LocalUserDocument> | undefined) ??
+    model<LocalUserDocument>("LocalUser", LocalUserSchema)
+  );
 }

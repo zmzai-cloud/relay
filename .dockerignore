@@ -1,0 +1,15 @@
+.git
+.worktrees
+node_modules
+.next
+原型
+docs
+tests
+screenshots
+*.md
+.env
+.env.*
+!.env.example
+Dockerfile
+compose.yml
+tsconfig.tsbuildinfo
