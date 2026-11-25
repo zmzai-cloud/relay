@@ -27,8 +27,8 @@ services:
     restart: "no"
 
   app:
-    # 预构建镜像优先（docker compose build 则用本地构建覆盖）
-    image: ghcr.io/zmzai-cloud/relay:latest
+    # 默认本地构建；GHCR 镜像包设为 public 后可解注释直接拉取
+    # image: ghcr.io/zmzai-cloud/relay:latest
     build:
       context: .
       args:

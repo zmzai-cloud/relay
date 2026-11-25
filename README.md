@@ -67,8 +67,8 @@ curl http://localhost:3000/v1/chat/completions \
   -d '{"model":"你的模型名","messages":[{"role":"user","content":"你好"}]}'
 ```
 
-> 预构建镜像：`ghcr.io/zmzai-cloud/relay:latest`（compose 默认拉取，
-> 也可 `docker compose build` 本地构建）。
+> 预构建镜像：`ghcr.io/zmzai-cloud/relay:latest`（compose 默认本地构建；
+> 镜像包公开后可解注释 compose 中的 image 行直接拉取）。
 > 注意 compose 里的 MongoDB 以单节点副本集运行——计费核销与
 > 渠道发布走事务，需要 replSet。
 
