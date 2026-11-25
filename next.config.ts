@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  // Docker 自托管（开源化批次 2）：产物自含 server.js + 精简 node_modules
-  output: "standalone",
+  // Docker 自托管（开源化批次 2）：产物自含 server.js + 精简 node_modules。
+  // 仅容器构建（Dockerfile 设 RELAY_DOCKER_BUILD=1）开启——官方不支持
+  // standalone 下的 next start，HK 生产走 next start 必须保持 undefined。
+  output: process.env.RELAY_DOCKER_BUILD === "1" ? "standalone" : undefined,
   // 私有 TS 包，需显式转译（@zmzai/contracts 已内联，见 providers/telemetry/contracts.ts）
   transpilePackages: ["@zmzai/db", "@zmzai/theme"],
   // OpenAI 兼容：标准 /v1/* 路径映射到内部 /api/v1/*

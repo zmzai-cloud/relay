@@ -8,7 +8,7 @@ RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
 COPY . .
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_TELEMETRY_DISABLED=1 RELAY_DOCKER_BUILD=1
 # NEXT_PUBLIC_* 在此内联；通用镜像用默认值，部署档案（如 zmzai）经构建参数覆盖
 ARG NEXT_PUBLIC_API_ORIGIN
 ARG NEXT_PUBLIC_AUTH_URL
