@@ -10,7 +10,8 @@ name: deploy
 
 env:
   APP_NAME: relay
-  HK_HOST: REDACTED-HOST
+  # HK_HOST 走 secret（开源公开：IP 不进代码库）
+  HK_HOST: ${{ secrets.HK_HOST }}
   HK_USER: root
 
 jobs:

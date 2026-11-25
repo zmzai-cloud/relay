@@ -1,108 +1,148 @@
-# Relay · zmzai.cloud
+# Relay
 
-`m.zmzai.cloud` 是 ZMZ AI 的模型中转与额度服务。
+**自托管的 LLM API 中转站** —— OpenAI 兼容入口、多渠道路由、按 token 计费。
 
-它负责把用户登录态、可用模型、额度钱包、上游请求和服务间调用边界放在同一个地方。Agent 和 Sandbox 不直接接触用户模型密钥；它们通过 Relay 获取可用模型并完成调用。
+[![deploy](https://github.com/zmzai-cloud/relay/actions/workflows/deploy.yml/badge.svg)](https://github.com/zmzai-cloud/relay/actions/workflows/deploy.yml)
+[![docker](https://github.com/zmzai-cloud/relay/actions/workflows/docker.yml/badge.svg)](https://github.com/zmzai-cloud/relay/actions/workflows/docker.yml)
+[![release](https://github.com/zmzai-cloud/relay/actions/workflows/release.yml/badge.svg)](https://github.com/zmzai-cloud/relay/actions/workflows/release.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-## 职责
+> Self-hosted LLM API relay: an OpenAI-compatible gateway with multi-channel
+> routing, token-level billing and a first-boot setup wizard.
+> [English summary](#english-summary) at the end.
 
-- 维护公开模型目录和用户可用模型；
-- 管理用户钱包、套餐、额度周期和调用扣费；
-- 代理上游模型请求，并设置超时、错误边界和安全 fetch；
-- 给 Sandbox 解析 `sandbox_key`，判断调用方是否有权限执行；
-- 给 Agent 提供内部模型调用接口，支持服务密钥轮换；
-- 给 Agent 提供**本机工具桥接**：需要用户本机能力（fs/shell/notify）时，经 `zmzai-bridge` 下发到用户的桌面客户端；
-- 提供管理页，用于查看模型、钱包和运维状态。
+## 它是什么
 
-## 当前边界
+把多个上游模型渠道收敛成**一个 OpenAI 兼容端点**：
 
-- 这是 ZMZ AI 内部的 Relay，不是通用商业 API 网关；
-- 管理端依赖zmzai账号体系，并额外要求管理员角色；
-- 额度、套餐和上游策略仍在迭代，README 只描述当前仓库边界。
-
-## 目录
-
-| 路径 | 说明 |
-| --- | --- |
-| `app/` | 公开页、dashboard、admin、models、docs |
-| `providers/auth/` | 登录态、API key、sandbox key 与 Agent service auth |
-| `providers/billing/` | 钱包、套餐、周期和扣费服务 |
-| `providers/catalog/` | 公开模型目录 |
-| `providers/bridge/` | 本地工具桥接：vendored bridge-sdk 与客户端单例 |
-| `providers/network/` | 安全上游请求封装 |
-| `scripts/seed-deepseek.mjs` | 初始化 DeepSeek 模型数据 |
-| `memory/` | 运行事故和修复记录 |
-
-## 本地运行
-
-```bash
-pnpm install
-pnpm dev
+```
+OpenAI SDK / zcode / codex / 任何 OpenAI 协议客户端
+        │  baseURL 换成 https://your-domain/v1
+        ▼
+┌──────────────────────────────────────────────┐
+│ Relay：鉴权 · 余额预占 · 自动路由 · 按 token 结算 │
+└──────────────────────────────────────────────┘
+        │ 按优先级故障切换
+        ▼
+   上游渠道（任意 OpenAI 兼容服务）
 ```
 
-常用检查：
+任何说 OpenAI 协议的工具，改一行 baseURL 即可接入；你在 Relay 侧决定
+有哪些模型、多少钱、走哪条渠道。
+
+## 特性
+
+- **OpenAI 双兼容**：`/v1/chat/completions`（含 SSE 流式）与 `/v1/responses`
+  兼容层；`GET /v1/models` 按调用者权限返回可用模型
+- **多渠道路由**：优先级排序、失败自动切换；渠道-模型级健康隔离
+  （单个模型失败不暂停同渠道其他模型）、冷却与恢复探测
+- **按 token 计费**：输入/输出/缓存读分列计价；调用前预占、结束按实际
+  用量结算；余额账本与毛利报表（收入/上游成本/毛利率，按模型与渠道聚合）
+- **API Key 管理**：`zrk_` 前缀 Key、模型范围、限速、月消费上限、随时吊销
+- **人工收款流**：用户申请额度 → 5 分钟申请码 → 管理员核对到账确认入账
+  （在线支付接入点已预留 `PaymentProvider` 接口）
+- **首启安装向导**：`docker compose up` 后 `/setup` 五步完成
+  管理员/品牌/首条渠道；白标（站点名/域名/点睛色）
+- **双认证档**：`local`（argon2id + 无状态 HMAC 会话）或对接外部 SSO
+- **运维台账**：全链路审计日志、渠道双段探测（连通 + 真实推理）、
+  待核查成本对账
+
+## 快速开始
 
 ```bash
-pnpm typecheck
-pnpm test
+git clone https://github.com/zmzai-cloud/relay.git && cd relay
+cp .env.example .env        # 至少改 AUTH_SECRET（32+ 随机串）
+docker compose up -d
 ```
 
-集成测试需要本机 PATH 中有 `mongod`；测试会启动临时的本地副本集，并在结束时清理测试数据。
+浏览器打开 `http://localhost:3000/setup`：创建管理员 → 设置站点品牌 →
+（完成安装后）用「添加模型引导」接入第一条上游渠道并定价。
 
-初始化模型目录：
+然后即可调用：
 
 ```bash
-pnpm seed:deepseek
+curl http://localhost:3000/v1/chat/completions \
+  -H "Authorization: Bearer zrk_你的Key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"你的模型名","messages":[{"role":"user","content":"你好"}]}'
 ```
 
-## 环境变量
+> 预构建镜像：`ghcr.io/zmzai-cloud/relay:latest`（compose 默认拉取，
+> 也可 `docker compose build` 本地构建）。
+> 注意 compose 里的 MongoDB 以单节点副本集运行——计费核销与
+> 渠道发布走事务，需要 replSet。
 
-| 变量 | 默认值 | 说明 |
+## 部署形态（Deploy Profile）
+
+| 维度 | 选项 | 说明 |
 | --- | --- | --- |
-| `APP_URL` | `http://localhost:3000` | 当前 Relay 服务地址 |
-| `MONGODB_URI` | 无 | 与zmzai账号体系共用的 MongoDB |
-| `AUTH_SECRET` | 无 | 必须与zmzai一致，用于校验 session |
-| `SESSION_COOKIE_NAME` | `muzhi_session` | 登录态 cookie 名称 |
-| `SESSION_COOKIE_DOMAIN` | 空 | 多子域共享登录时使用 |
-| `RELAY_DEFAULT_UPSTREAM_TIMEOUT_MS` | `60000` | 上游模型请求默认超时 |
-| `RELAY_INTERNAL_CRON_SECRET` | 空 | 内部定时任务密钥 |
-| `RELAY_SANDBOX_SERVICE_SECRET_CURRENT` | 空 | Sandbox 调 Relay 的当前服务密钥 |
-| `RELAY_SANDBOX_SERVICE_SECRET_PREVIOUS` | 空 | Sandbox 服务密钥轮换旧值 |
-| `RELAY_AGENT_SERVICE_SECRET_CURRENT` | 空 | Agent 调 Relay 的当前服务密钥 |
-| `RELAY_AGENT_SERVICE_SECRET_PREVIOUS` | 空 | Agent 服务密钥轮换旧值 |
-| `RELAY_INTERNAL_ORIGIN` | `http://127.0.0.1:3002` | Agent 内部调用 Relay 的私网入口 |
-| `RELAY_BRIDGE_URL` | `http://127.0.0.1:8787` | 本机工具桥接端点（zmzai-bridge） |
-| `RELAY_BRIDGE_TOKEN` | 空（回退 dev 默认） | 桥接内部 API Token，生产必须设置 |
-| `BILLING_INGEST_URL` | 空 | usage 事件上报地址（zmzai-billing `/api/v1/ingest`）；空 = 静默跳过 |
-| `BILLING_INGEST_KEY` | 空 | 上报服务密钥（billing `INGEST_SERVICE_KEYS` 中 relay 那把） |
+| 认证 | `local`（默认）/ 外部 SSO | local=本站账号密码；SSO 适配器模式见 `providers/auth/` |
+| 支付 | `manual`（默认） | 申请码+人工核销；epay/stripe 接口已预留 |
+| 品牌 | `BRAND_SITE_TITLE` 等 | 站点名/描述/对外域名/点睛色全配置驱动 |
+| 数据 | MongoDB | 自带 compose；也可用外部实例（需支持事务） |
 
-## 本机工具桥接（local-tool）
+全部环境变量见 [.env.example](.env.example)，架构与接缝设计见
+[docs/open-product-architecture.md](docs/open-product-architecture.md)。
 
-当 Agent 需要操作**用户自己的机器**（本机文件 / 本机命令 / 通知）时，调用
-`POST /api/internal/agent/local-tool`（agent-service 鉴权）：
+## 与 one-api / new-api 的差异
 
-```json
-{
-  "tool": "fs.read",
-  "params": { "path": "~/notes.txt" },
-  "requestId": "optional-correlation-id"
-}
+同类开源项目（one-api / new-api）已验证这个品类；Relay 的不同点：
+
+1. **现代栈与台账设计**：Next.js 15 + React 19，运营后台是高密度工程台账
+   （等宽数字、渠道健康度、毛利口径明示）
+2. **工程细节**：OpenAI Responses API 兼容层、渠道双段探测、
+   渠道-模型级健康隔离、待核查成本对账、操作审计
+3. **AI Coding 友好**：`reasoning_effort` 透传、长上下文模型支持、
+   zcode/codex 等编码工具换 baseURL 即用
+
+## 开发
+
+```bash
+corepack pnpm install
+corepack pnpm dev        # 本地开发（需 MONGODB_URI/AUTH_SECRET）
+corepack pnpm test       # vitest（需要 Node ≥ 26 与本地 mongod）
+corepack pnpm typecheck
 ```
 
-- `userId` 取自 `x-zmzai-agent-user-id` 头（与 `/api/internal/agent/chat` 同源），Relay 校验用户存在且激活后，
-  经 `zmzai-bridge` 的 `POST /v1/users/:userId/tool` 下发到该用户当前在线的桌面客户端。
-- `GET /api/internal/agent/local-tool` 可探测用户是否绑定了在线客户端（`{ "bound": true|false }`），
-  Agent 据此决定是否向模型暴露本机工具。
-- 错误码：`409` 用户无在线客户端 / `504` 客户端长时间无响应（用户在审批或卡死）/ `502` 桥接异常。
-- **执行边界**：`zmzai-sandbox` 的代码/命令在云端容器内执行，不经此通道；
-  本通道只服务用户本机，且 `fs.write` / `shell.exec` 在客户端必弹用户审批。
+CI（`.github/workflows/docker.yml`）每次 push 会做完整的容器级验证：
+构建镜像 → 副本集 Mongo → 首启安装 → 登录 → 门控断言。
 
-## 相关仓库
+## Roadmap
 
-- [`zmzai-agent`](https://github.com/zmzai-cloud/zmzai-agent)：Agent 编排层，通过 Relay 调模型、下发本机工具；
-- [`zmzai-sandbox`](https://github.com/zmzai-cloud/zmzai-sandbox)：执行层，通过 Relay 校验 `sandbox_key` 和模型调用（云端容器内执行，不经桥）；
-- [`zmzai-bridge`](https://github.com/zmzai-cloud/zmzai-bridge)：云端桥接端点，终止客户端反向隧道并做用户路由；
-- [`zmzai-client`](https://github.com/zmzai-cloud/zmzai-client)：桌面客户端，本地审批 + 审计 + 受限执行；
-- [`zmzai-db`](https://github.com/zmzai-cloud/zmzai-db)：共享账号与 session schema。
+- [ ] 在线支付（易支付 / Stripe，`PaymentProvider` 插件位已留）
+- [ ] 邮件通知（余额告警 / 订单）
+- [ ] 多管理员 RBAC
+- [ ] 上游渠道预设库（常用供应商一键模板）
 
-Apache-2.0 · zmzai
+## License
+
+[Apache-2.0](LICENSE)
+
+---
+
+## English Summary
+
+**Relay** is a self-hosted LLM API relay/gateway:
+
+- **OpenAI-compatible**: `/v1/chat/completions` (SSE streaming) and a
+  `/v1/responses` compatibility layer — point any OpenAI SDK at it.
+- **Multi-channel routing**: priority-based failover with per-model health
+  isolation, cooldowns and recovery probes.
+- **Token-level billing**: reservation → settlement, per-model pricing,
+  ledger and margin reports (revenue / upstream cost / margin).
+- **API keys**: scoping, rate limits, monthly spend caps, revocation.
+- **First-boot wizard**: `docker compose up`, open `/setup`, done.
+  White-label site name / domain / accent color.
+- **Auth profiles**: built-in local auth (argon2id + stateless HMAC
+  sessions) or adapt an external SSO.
+
+Quick start:
+
+```bash
+cp .env.example .env   # set AUTH_SECRET (32+ random chars)
+docker compose up -d
+# open http://localhost:3000/setup
+```
+
+Requires a MongoDB replica set for transactional settlement (the bundled
+compose handles this). Apache-2.0 licensed.
