@@ -21,11 +21,9 @@ services:
     depends_on:
       mongo:
         condition: service_started
-    entrypoint: >
-      bash -c 'for i in $$(seq 1 30); do
-        mongosh mongodb://mongo:27017/?directConnection=true --quiet --eval
-        "try { rs.initiate({_id:\"rs0\",members:[{_id:0,host:\"mongo:27017\"}]}); quit(0) } catch (e) { quit(1) }"
-        && exit 0; sleep 2; done; exit 1'
+    # 注意：块标量（>）不处理反斜杠转义，\" 会原样传给 mongosh 造成 JS 语法错误
+    # （首个 CI 实测翻车点）。改用 flow 风格数组：\" 才是真转义。
+    entrypoint: ["bash", "-c", "for i in $$(seq 1 30); do mongosh 'mongodb://mongo:27017/?directConnection=true' --quiet --eval \"try { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]}); quit(0) } catch (e) { quit(1) }\" && exit 0; sleep 2; done; exit 1"]
     restart: "no"
 
   app:
