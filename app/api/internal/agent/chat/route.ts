@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { internalModulesEnabled } from "@/config/internal-modules";
 import { z } from "zod";
 
 import { isAgentServiceAuthorization } from "@/providers/auth/agent-service";
@@ -28,6 +29,7 @@ const bodySchema = z.object({
 }).strict();
 
 export async function POST(request: NextRequest) {
+  if (!internalModulesEnabled()) return NextResponse.json({ code: "INTERNAL_MODULE_DISABLED", error: "内部端点未启用" }, { status: 404 });
   const authorization = request.headers.get("authorization");
   if (!isAgentServiceAuthorization(authorization)) return NextResponse.json({ code: "INTERNAL_SERVICE_UNAUTHORIZED", error: "未授权" }, { status: 401 });
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));

@@ -22,6 +22,11 @@ const envSchema = z.object({
   SESSION_COOKIE_DOMAIN: optionalEnvString(),
   /** 支付提供方（开源化批次 2）：manual=人工申请码（现状）；在线支付落地后扩展枚举。 */
   PAYMENT_PROVIDER: z.enum(["manual"]).default("manual"),
+  /** zmzai 内部端点（/api/internal/*）总开关：默认开（zmzai 现网行为）；自托管部署关。 */
+  ENABLE_ZMZAI_INTERNAL: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v.trim() === "" ? true : ["1", "true", "yes", "on"].includes(v.trim().toLowerCase()))),
   /** 认证提供方（开源化批次 2）：local=本站账号密码；zmzai_sso（默认）=共享会话现状。 */
   AUTH_PROVIDER: z.enum(["local", "zmzai_sso"]).default("zmzai_sso"),
   /** Relay 管理端额外要求 role=admin **/

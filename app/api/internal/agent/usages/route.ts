@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { internalModulesEnabled } from "@/config/internal-modules";
 
 import { isAgentServiceAuthorization } from "@/providers/auth/agent-service";
 import { connectMongo } from "@/providers/database/mongodb/connection";
@@ -14,6 +15,7 @@ export const dynamic = "force-dynamic";
  * Agent project's budget reconciliation.
  */
 export async function GET(request: NextRequest) {
+  if (!internalModulesEnabled()) return NextResponse.json({ code: "INTERNAL_MODULE_DISABLED", error: "内部端点未启用" }, { status: 404 });
   if (!isAgentServiceAuthorization(request.headers.get("authorization"))) {
     return NextResponse.json({ code: "INTERNAL_SERVICE_UNAUTHORIZED", error: "未授权" }, { status: 401 });
   }

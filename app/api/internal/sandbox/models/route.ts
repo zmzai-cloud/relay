@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { internalModulesEnabled } from "@/config/internal-modules";
 import { z } from "zod";
 
 import { isSandboxServiceAuthorization, resolveSandboxKey } from "@/providers/auth/sandbox-key";
@@ -7,6 +8,7 @@ import { getInternalModelSelectorData } from "@/providers/catalog/public-models"
 const bodySchema = z.object({ sandboxKey: z.string().min(1) }).strict();
 
 export async function POST(request: NextRequest) {
+  if (!internalModulesEnabled()) return NextResponse.json({ code: "INTERNAL_MODULE_DISABLED", error: "内部端点未启用" }, { status: 404 });
   if (!isSandboxServiceAuthorization(request.headers.get("authorization"))) {
     return NextResponse.json({ code: "INTERNAL_SERVICE_UNAUTHORIZED", error: "未授权" }, { status: 401 });
   }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { internalModulesEnabled } from "@/config/internal-modules";
 import { z } from "zod";
 
 import { isSandboxServiceAuthorization } from "@/providers/auth/sandbox-key";
@@ -6,6 +7,7 @@ import { isSandboxServiceAuthorization } from "@/providers/auth/sandbox-key";
 const bodySchema = z.object({ sandboxKey: z.string().min(1), model: z.string().min(1), messages: z.array(z.object({ role: z.string(), content: z.string() })).min(1), stream: z.boolean().optional(), tools: z.array(z.unknown()).optional(), tool_choice: z.unknown().optional(), max_tokens: z.number().int().positive().optional(), requestId: z.string().max(128).optional() }).strict();
 
 export async function POST(request: NextRequest) {
+  if (!internalModulesEnabled()) return NextResponse.json({ code: "INTERNAL_MODULE_DISABLED", error: "内部端点未启用" }, { status: 404 });
   if (!isSandboxServiceAuthorization(request.headers.get("authorization"))) return NextResponse.json({ code: "INTERNAL_SERVICE_UNAUTHORIZED", error: "未授权" }, { status: 401 });
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ code: "INVALID_BODY", error: "请求体格式不正确" }, { status: 400 });

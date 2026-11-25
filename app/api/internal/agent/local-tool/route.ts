@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { internalModulesEnabled } from "@/config/internal-modules";
 import { z } from "zod";
 
 import { isAgentServiceAuthorization } from "@/providers/auth/agent-service";
@@ -61,6 +62,7 @@ function mapBridgeError(e: unknown): NextResponse {
 }
 
 export async function POST(req: NextRequest) {
+  if (!internalModulesEnabled()) return NextResponse.json({ code: "INTERNAL_MODULE_DISABLED", error: "内部端点未启用" }, { status: 404 });
   const userId = await callerUserId(req);
   if (!userId) return NextResponse.json({ code: "INTERNAL_SERVICE_UNAUTHORIZED", error: "未授权" }, { status: 401 });
   if (!(await userIsActive(userId))) return NextResponse.json({ code: "USER_FORBIDDEN", error: "用户不存在或未激活" }, { status: 403 });
@@ -80,6 +82,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  if (!internalModulesEnabled()) return NextResponse.json({ code: "INTERNAL_MODULE_DISABLED", error: "内部端点未启用" }, { status: 404 });
   const userId = await callerUserId(req);
   if (!userId) return NextResponse.json({ code: "INTERNAL_SERVICE_UNAUTHORIZED", error: "未授权" }, { status: 401 });
   if (!(await userIsActive(userId))) return NextResponse.json({ code: "USER_FORBIDDEN", error: "用户不存在或未激活" }, { status: 403 });

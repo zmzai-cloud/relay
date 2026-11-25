@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { internalModulesEnabled } from "@/config/internal-modules";
 import { z } from "zod";
 
 import { UserModel } from "@zmzai/db";
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
 const bodySchema = z.object({ userId: z.string().min(1).max(128) }).strict();
 
 export async function POST(request: NextRequest) {
+  if (!internalModulesEnabled()) return NextResponse.json({ code: "INTERNAL_MODULE_DISABLED", error: "内部端点未启用" }, { status: 404 });
   if (!isAgentServiceAuthorization(request.headers.get("authorization"))) {
     return NextResponse.json({ code: "INTERNAL_SERVICE_UNAUTHORIZED", error: "未授权" }, { status: 401 });
   }

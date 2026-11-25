@@ -60,8 +60,9 @@ interface PaymentProvider {
 ### 2.3 InternalModules —— zmzai 私有端点
 
 `/api/internal/agent/*`、`/api/internal/sandbox/*` 移入 `modules/zmzai/`，由
-`ENABLE_ZMZAI_INTERNAL=true` 显式启用（默认 false，开源发行版不出现在路由表）。
-内部鉴权沿用服务密钥，不走 AuthProvider。
+`ENABLE_ZMZAI_INTERNAL` 开关（实现取默认 true——与 AUTH_PROVIDER 同向：未设置即
+保持 zmzai 现网行为零变化；开源 compose/env.example 显式设 false）。关闭时
+`/api/internal/*` 一律 404（不暴露端点存在性）；开启时内部鉴权沿用服务密钥。
 
 ### 2.4 BrandConfig —— 品牌（白标）
 

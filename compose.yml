@@ -38,6 +38,8 @@ services:
     env_file: .env
     environment:
       MONGODB_URI: mongodb://mongo:27017/relay?replicaSet=rs0
+      # 自托管形态默认关 zmzai 内部端点（zmzai 参考部署设 true）
+      ENABLE_ZMZAI_INTERNAL: ${ENABLE_ZMZAI_INTERNAL:-false}
     ports:
       - "${RELAY_PORT:-3000}:3000"
     depends_on:

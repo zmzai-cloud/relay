@@ -1,0 +1,65 @@
+name: docker
+
+# 容器产物验证（开源化批次 3）：docker compose 全链——构建镜像、起 mongo 副本集、
+# 首启安装端到端。本机 Docker Hub 不可达无法验证（见 docs/open-product-architecture.md），
+# 由 GitHub runner 网络 兜底。不推镜像仓库（P3 开源发布时再定 registry）。
+
+"on":
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compose env
+        run: |
+          cat > .env <<'EOF'
+          NODE_ENV=production
+          AUTH_PROVIDER=local
+          AUTH_SECRET=ci-smoke-0123456789abcdef0123456789
+          NEXT_PUBLIC_API_ORIGIN=http://localhost:3000
+          ENABLE_ZMZAI_INTERNAL=false
+          EOF
+
+      - name: Build & boot
+        run: docker compose up -d
+
+      - name: Wait for app health
+        run: |
+          for i in $(seq 1 40); do
+            curl -sf http://localhost:3000/api/health > /dev/null && { echo "healthy (${i})"; exit 0; }
+            sleep 5
+          done
+          echo "app 未在 200s 内就绪"; docker compose logs app; exit 1
+
+      - name: First-boot E2E
+        run: |
+          set -e
+          # 未安装态
+          test "$(curl -sf http://localhost:3000/api/setup)" = '{"installed":false,"provider":"local"}'
+          # 安装
+          curl -sf -X POST http://localhost:3000/api/setup \
+            -H 'content-type: application/json' \
+            -d '{"admin":{"email":"ci@relay.test","password":"ci-pass-123"},"brand":{"siteName":"CI","apiOrigin":"https://ci.relay.test","spotPreset":"indigo"}}' \
+            | grep -q '"role":"admin"'
+          # 防重装
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:3000/api/setup \
+            -H 'content-type: application/json' \
+            -d '{"admin":{"email":"x@x.io","password":"12345678"},"brand":{"siteName":"X","apiOrigin":"https://x.io"}}')
+          test "$code" = "409"
+          # 登录
+          curl -sf -X POST http://localhost:3000/api/auth/local/login \
+            -H 'content-type: application/json' \
+            -d '{"email":"ci@relay.test","password":"ci-pass-123"}' | grep -q '"ok":true'
+          # 内部模块门控（compose 显式关闭）
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:3000/api/internal/agent/models \
+            -H 'content-type: application/json' -d '{}')" = "404"
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --no-color app mongo || true
