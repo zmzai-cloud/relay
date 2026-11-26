@@ -29,7 +29,6 @@ export default async function ModelDetailPage({ params }: { params: Promise<{ mo
     ["缓存读 / 1K", model.cacheReadPricePer1kMicros > 0 ? moneyMicros(model.cacheReadPricePer1kMicros) : "按输入价"],
     ["缓存写 / 1K", model.cacheWritePricePer1kMicros > 0 ? moneyMicros(model.cacheWritePricePer1kMicros) : "按输入价"],
     ["上下文", `${model.maxInputTokens.toLocaleString()} tokens`],
-    ["最大输出", `${model.maxOutputTokens.toLocaleString()} tokens`],
   ];
   return (
     <PublicShell user={user} isAdminUser={user?.role === "admin"}>
@@ -52,6 +51,8 @@ export default async function ModelDetailPage({ params }: { params: Promise<{ mo
           </div>
         ))}
       </div>
+
+      <p className="mt-2.5 text-xs text-ink-2">最大输出上限以运营配置为准；超过上限的请求返回 <code className="font-mono">MAX_TOKENS_EXCEEDED</code> 并记录为一次被拒绝的调用。</p>
 
       {matches.length > 1 ? <div className="mt-8 overflow-x-auto rounded-lg border border-line">
         <table className="w-full min-w-[36rem] text-left text-sm">
