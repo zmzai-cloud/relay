@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { PageHeader, Terminal } from "@zmzai/theme";
+import { Terminal } from "@zmzai/theme";
+import { LedgerHead } from "@/components/ledger-ui";
 import { PublicShell } from "@/components/public-shell";
 import { connectMongo } from "@/providers/database/mongodb/connection";
 import { getCurrentUser } from "@/providers/auth/session";
@@ -16,22 +17,23 @@ export default async function PublicDocsPage() {
   await connectMongo();
   return (
     <PublicShell user={user} isAdminUser={user?.role === "admin"}>
-      <div className="max-w-4xl">
-        <PageHeader
-          icon="book"
-          eyebrow="接口参考"
-          title="API 文档"
-          description={
-            <>
-              Relay 兼容 OpenAI Chat Completions 协议：把 baseURL 指向 <code className="font-mono text-xs">{apiUrl("/v1")}</code>，用 API Key 鉴权即可。zcode、codex 等第三方工具直接使用此地址。模型与价格见 <Link href="/models" className="text-accent underline underline-offset-4">模型列表</Link>。
-            </>
-          }
-        />
+      <div className="max-w-4xl pt-0">
+        <div className="pt-9">
+          <LedgerHead
+            eyebrow="接口参考"
+            title="API 文档"
+            description={
+              <>
+                Relay 兼容 OpenAI Chat Completions 协议：把 baseURL 指向 <code className="font-mono text-xs">{apiUrl("/v1")}</code>，用 API Key 鉴权即可。zcode、codex 等第三方工具直接使用此地址。模型与价格见 <Link href="/models" className="text-accent underline underline-offset-4">模型列表</Link>。
+              </>
+            }
+          />
+        </div>
 
-        <div className="mt-8 grid gap-12 lg:grid-cols-[180px_minmax(0,1fr)]">
+        <div className="mt-8 grid gap-12 lg:grid-cols-[180px_minmax(0,1fr)] *:min-w-0">
           <nav className="hidden lg:block" aria-label="文档目录">
             <div className="sticky top-20">
-              <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.06em] text-ink-2">目录</p>
+              <p className="mb-2 font-mono text-[11px] text-ink-2">目录</p>
               <ul>
                 {["鉴权", "非流式请求", "流式请求", "渠道路由", "推理强度", "计费", "上游异常与重试"].map((t, i) => (
                   <li key={t}>

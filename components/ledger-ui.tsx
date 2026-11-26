@@ -51,7 +51,7 @@ export function Kpi({
   const tone = danger ? "text-danger" : success ? "text-success" : "text-ink";
   return (
     <div className="p-5">
-      <p className="font-mono text-xs uppercase tracking-[0.06em] text-ink-2">{label}</p>
+      <p className="font-mono text-xs text-ink-2">{label}</p>
       <p className={`mt-2 font-mono text-3xl font-semibold tracking-tight tabular-nums ${tone}`}>{value}</p>
       {hint ? <p className="mt-1.5 text-xs text-ink-2">{hint}</p> : null}
     </div>
@@ -82,7 +82,10 @@ export function SectHead({ title, more }: { title: string; more?: { label: strin
   );
 }
 
-/** 台账表头行样式（供各页 thead 使用）。 */
-export const ledgerTh = "border-b border-rule px-4 py-2.5 text-left font-mono text-xs font-normal uppercase tracking-[0.06em] text-ink-2";
+/**
+ * 台账表头行样式（供各页 thead 使用）。
+ * 不做 uppercase / 加字距：列名多为中文——uppercase 无意义，而 tracking 会把中文字距拉散。
+ */
+export const ledgerTh = "border-b border-rule px-4 py-2.5 text-left font-mono text-xs font-normal text-ink-2";
 /** 台账数字单元格样式。 */
 export const ledgerNum = "px-4 py-3 text-right font-mono text-xs tabular-nums";

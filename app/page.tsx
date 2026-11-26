@@ -32,7 +32,7 @@ export default async function HomePage() {
   return (
     <PublicShell user={user ? { name: user.name } : null} isAdminUser={user?.role === "admin"}>
       {/* Hero：左叙事 · 右终端 */}
-      <section className="page-shell grid items-center gap-12 pt-14 lg:grid-cols-[10fr_9fr]">
+      <section className="grid items-center gap-12 pt-14 lg:grid-cols-[10fr_9fr]">
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-2">
             {totalModels} 个模型 · {channels.length} 条上游渠道 · OpenAI 兼容
@@ -96,7 +96,7 @@ data: {"usage":{"prompt_tokens":${SSETTLE.inTok},
       </section>
 
       {/* 模型目录 */}
-      <section className="page-shell mt-14">
+      <section className="mt-14">
         <div className="flex items-baseline justify-between border-b border-rule pb-2.5">
           <h2 className="text-base font-semibold">模型目录</h2>
           <Link href="/models" className="font-mono text-xs text-ink-2 transition-colors hover:text-ink">
@@ -109,7 +109,7 @@ data: {"usage":{"prompt_tokens":${SSETTLE.inTok},
       </section>
 
       {/* 三步接入 */}
-      <section className="page-shell mt-14">
+      <section className="mt-14">
         <div className="border-b border-rule pb-2.5">
           <h2 className="text-base font-semibold">三步接入</h2>
         </div>
@@ -133,13 +133,13 @@ data: {"usage":{"prompt_tokens":${SSETTLE.inTok},
       </section>
 
       {/* 渠道路由 */}
-      <section className="page-shell mt-14 mb-20">
+      <section className="mt-14">
         <div className="border-b border-rule pb-2.5">
           <h2 className="text-base font-semibold">渠道路由</h2>
         </div>
         <div className="mt-4 flex flex-col overflow-hidden rounded-lg border border-line sm:flex-row sm:items-stretch">
           <div className="flex-1 p-5">
-            <p className="font-mono text-[11px] uppercase tracking-[0.06em] text-ink-2">调用方</p>
+            <p className="font-mono text-[11px] text-ink-2">调用方</p>
             <p className="mt-2 text-sm font-medium">OpenAI SDK · zcode · codex</p>
             <p className="mt-1 text-[12.5px] text-ink-2">任何说 OpenAI 协议的工具</p>
           </div>
@@ -155,7 +155,7 @@ data: {"usage":{"prompt_tokens":${SSETTLE.inTok},
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round"><path d="M4 12h16m-6-6 6 6-6 6" /></svg>
           </div>
           <div className="flex-1 p-5">
-            <p className="font-mono text-[11px] uppercase tracking-[0.06em] text-ink-2">上游渠道</p>
+            <p className="font-mono text-[11px] text-ink-2">上游渠道</p>
             <p className="mt-2 font-mono text-sm font-medium">{channels.map((ch) => ch.channel).join(" · ") || "—"}</p>
             <p className="mt-1 text-[12.5px] text-ink-2">价格按实际使用的渠道计算，可传 channel 参数固定渠道</p>
           </div>

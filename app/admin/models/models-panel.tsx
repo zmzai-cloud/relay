@@ -205,7 +205,7 @@ export function ModelsPanel({ initialPrices }: { initialPrices: ModelPriceRow[] 
       <div className="overflow-x-auto rounded-lg border border-line">
         <table className="w-full min-w-[36rem] border-collapse text-sm">
           <thead>
-            <tr className="border-b border-rule text-left font-mono text-xs uppercase tracking-[0.06em] text-ink-2">
+            <tr className="border-b border-rule text-left font-mono text-xs text-ink-2">
               <th className="px-4 py-2.5 font-normal">模型</th>
               <th className="px-4 py-2.5 font-normal">状态</th>
               <th className="px-4 py-2.5 text-right font-normal">输入 / 1M</th>

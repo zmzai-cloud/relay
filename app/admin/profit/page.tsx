@@ -111,7 +111,7 @@ export default async function ProfitPage({ searchParams }: { searchParams: Promi
           <div className="overflow-x-auto rounded-lg border border-line">
             <table className="w-full min-w-[34rem] border-collapse text-sm">
               <thead>
-                <tr className="border-b border-rule text-left font-mono text-xs uppercase tracking-[0.06em] text-ink-2">
+                <tr className="border-b border-rule text-left font-mono text-xs text-ink-2">
                   <th className="px-4 py-2.5 font-normal">模型</th>
                   <th className="px-4 py-2.5 text-right font-normal">调用</th>
                   <th className="px-4 py-2.5 text-right font-normal">Tokens</th>
@@ -149,7 +149,7 @@ export default async function ProfitPage({ searchParams }: { searchParams: Promi
           <div className="overflow-x-auto rounded-lg border border-line">
             <table className="w-full min-w-[28rem] border-collapse text-sm">
               <thead>
-                <tr className="border-b border-rule text-left font-mono text-xs uppercase tracking-[0.06em] text-ink-2">
+                <tr className="border-b border-rule text-left font-mono text-xs text-ink-2">
                   <th className="px-4 py-2.5 font-normal">渠道</th>
                   <th className="px-4 py-2.5 text-right font-normal">调用</th>
                   <th className="px-4 py-2.5 text-right font-normal">收入</th>

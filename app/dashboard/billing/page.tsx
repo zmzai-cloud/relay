@@ -36,7 +36,7 @@ export default async function BillingPage() {
 
       <div className="mt-6 flex flex-wrap items-end justify-between gap-4 rounded-lg border border-line bg-bg p-6">
         <div>
-          <p className="font-mono text-xs uppercase tracking-[0.06em] text-ink-2">当前可用余额</p>
+          <p className="font-mono text-xs text-ink-2">当前可用余额</p>
           <p className="mt-2 font-mono text-4xl font-semibold tracking-tight tabular-nums text-ink">{cnyMicrosLabel(availableMicros)}</p>
         </div>
         {account ? (

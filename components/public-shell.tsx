@@ -19,6 +19,7 @@ const NAV = [
 /**
  * 公开区外壳（V3 台账设计·UI 批次 A）：顶栏导航替代侧栏——公开页做产品叙事，
  * 控制台登录后仍是侧栏工作台（app-shell 不变）。
+ * 容器由本壳统一提供（.page-shell 限宽居中 + 底部留白）；子页面勿再包 page-shell。
  * 保持旧 props 签名（user/isAdminUser），公开页面调用面零改动。
  */
 export function PublicShell({
@@ -76,7 +77,8 @@ export function PublicShell({
         </div>
       </header>
 
-      <main className="flex-1">{children}</main>
+      {/* 统一限宽：公开页内容不再各自包容器，避免漏包导致贴边 */}
+      <main className="page-shell flex-1 pb-20">{children}</main>
 
       <footer className="border-t border-line">
         <div className="page-shell flex items-center gap-5 py-5">
