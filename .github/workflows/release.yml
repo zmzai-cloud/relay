@@ -36,6 +36,9 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
+            # main 分支额外打 latest（compose 与 README 承诺的标签名；
+            # 首版漏了这条，导致包公开后 :latest 仍然 not found）
+            type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=sha
