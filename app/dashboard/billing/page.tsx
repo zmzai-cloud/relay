@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { PageHeader } from "@zmzai/theme";
+import { LedgerHead, SectHead } from "@/components/ledger-ui";
 
 import { BillingPanel } from "@/components/billing-panel";
 import { RelayShell } from "@/components/relay-shell";
@@ -28,37 +28,38 @@ export default async function BillingPage() {
   ];
   return (
     <RelayShell role="user" userName={user.name} isAdminUser={user.role === "admin"}>
-      <PageHeader
-        icon="wallet"
+      <LedgerHead
         eyebrow="控制台"
         title="额度充值"
         description="余额按调用实际用量扣减。首次进入会自动获得 ¥1 体验额度。"
       />
 
-      <div className="mt-6 flex items-center justify-between gap-6 rounded-xl border border-line bg-bg p-6">
+      <div className="mt-6 flex flex-wrap items-end justify-between gap-4 rounded-lg border border-line bg-bg p-6">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-muted">当前可用余额</p>
-          <p className="mt-2 font-mono text-4xl font-semibold tracking-tight text-ink">{cnyMicrosLabel(availableMicros)}</p>
+          <p className="font-mono text-xs uppercase tracking-[0.06em] text-ink-2">当前可用余额</p>
+          <p className="mt-2 font-mono text-4xl font-semibold tracking-tight tabular-nums text-ink">{cnyMicrosLabel(availableMicros)}</p>
         </div>
         {account ? (
           <div className="shrink-0 text-right">
-            <p className="text-xs text-muted">总余额 / 已预留</p>
-            <p className="mt-1 font-mono text-sm text-ink-2">
+            <p className="text-xs text-ink-2">总余额 / 已预留</p>
+            <p className="mt-1 font-mono text-sm tabular-nums">
               {cnyMicrosLabel(account.balanceMicros ?? 0)} / {cnyMicrosLabel(account.reservedMicros ?? 0)}
             </p>
           </div>
         ) : null}
       </div>
 
-      <h2 className="mt-10 text-lg font-semibold">充值流程</h2>
-      <div className="mt-4 grid gap-4 sm:grid-cols-3">
-        {steps.map(([title, description], index) => (
-          <div key={title} className="rounded-xl border border-line bg-bg p-5">
-            <p className="font-mono text-xs text-muted">{String(index + 1).padStart(2, "0")}</p>
-            <p className="mt-2 text-sm font-medium text-ink">{title}</p>
-            <p className="mt-1.5 text-xs leading-5 text-muted">{description}</p>
-          </div>
-        ))}
+      <div className="mt-10">
+        <SectHead title="充值流程" />
+        <ol className="mt-4 grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-3">
+          {steps.map(([title, description], index) => (
+            <li key={title} className="bg-bg p-5">
+              <p className="font-mono text-xs text-ink-2">{String(index + 1).padStart(2, "0")}</p>
+              <p className="mt-2 text-sm font-medium text-ink">{title}</p>
+              <p className="mt-1.5 text-xs leading-5 text-ink-2">{description}</p>
+            </li>
+          ))}
+        </ol>
       </div>
 
       <div className="mt-10">

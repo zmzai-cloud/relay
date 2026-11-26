@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { PageHeader } from "@zmzai/theme";
+import { LedgerHead } from "@/components/ledger-ui";
 
 import { RelayShell } from "@/components/relay-shell";
 import { getCurrentUser } from "@/providers/auth/session";
@@ -14,12 +14,7 @@ export default async function OperationsPage() {
   if (user.role !== "admin") redirect("/dashboard");
   return (
     <RelayShell role="admin" userName={user.name}>
-      <PageHeader
-        icon="sliders"
-        eyebrow="管理后台"
-        title="运营调整"
-        description="人工维护模型价目与用户余额，每次调整都会写入账本。"
-      />
+      <LedgerHead eyebrow="管理后台" title="运营调整" description="人工维护模型价目与用户余额，每次调整都会写入账本。" />
       <div className="mt-8"><OperationsPanel /></div>
     </RelayShell>
   );

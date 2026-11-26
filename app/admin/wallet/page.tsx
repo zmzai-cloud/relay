@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { PageHeader } from "@zmzai/theme";
+import { LedgerHead } from "@/components/ledger-ui";
 
 import { RelayShell } from "@/components/relay-shell";
 import { getCurrentUser } from "@/providers/auth/session";
@@ -22,12 +22,7 @@ export default async function WalletAdminPage() {
 
   return (
     <RelayShell role="admin" userName={user.name}>
-      <PageHeader
-        icon="wallet"
-        eyebrow="管理后台"
-        title="额度管理"
-        description="从 admin 资金池划拨额度给其他账户，或直接授信补充任意账户（含自己）。每次操作都写入双向账本与审计日志。"
-      />
+      <LedgerHead eyebrow="管理后台" title="额度管理" description="从 admin 资金池划拨额度给其他账户，或直接授信补充任意账户（含自己）。每次操作都写入双向账本与审计日志。" />
       <div className="mt-8">
         <WalletPanel
           poolBalanceMicros={account?.balanceMicros ?? 0}

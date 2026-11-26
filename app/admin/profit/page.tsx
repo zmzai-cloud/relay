@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader } from "@zmzai/theme";
+import { Kpi, KpiRow, LedgerHead, SectHead } from "@/components/ledger-ui";
 import { redirect } from "next/navigation";
 import { RelayShell } from "@/components/relay-shell";
 import { getCurrentUser } from "@/providers/auth/session";
@@ -82,52 +82,36 @@ export default async function ProfitPage({ searchParams }: { searchParams: Promi
   const profitClass = (value: number) => (value >= 0 ? "text-success" : "text-danger");
   return (
     <RelayShell role="admin" userName={user.name}>
-      <PageHeader
-        icon="trend-up"
-        eyebrow="管理后台"
-        title="毛利报表"
-        description={
+      <LedgerHead eyebrow="管理后台" title="毛利报表" description={
           <>
             按模型 / 渠道聚合的收入、成本与毛利。统计口径：最近 {days} 天内的成功与待结算调用。
           </>
-        }
-      />
-      <div className="mt-4 flex items-center gap-1 font-mono text-xs">
+        } />
+      <div className="mt-4 flex gap-1.5">
         {[7, 30].map((d) => (
           <Link
             key={d}
             href={`/admin/profit?days=${d}`}
-            className={`rounded-md px-2.5 py-1 transition-colors ${days === d ? "bg-accent/10 text-accent" : "text-muted hover:text-accent"}`}
+            aria-current={days === d ? "true" : undefined}
+            className={`rounded-full border px-3 py-1 text-[13px] transition-colors ${days === d ? "border-accent bg-accent text-accent-ink" : "border-line text-ink-2 hover:border-line-strong hover:text-ink"}`}
           >
             最近 {d} 天
           </Link>
         ))}
       </div>
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-line bg-surface p-4">
-          <p className="font-mono text-[11px] uppercase tracking-widest text-muted">收入</p>
-          <p className="mt-1 font-mono text-xl">{money(totals.revenueMicros)}</p>
-        </div>
-        <div className="rounded-lg border border-line bg-surface p-4">
-          <p className="font-mono text-[11px] uppercase tracking-widest text-muted">成本</p>
-          <p className="mt-1 font-mono text-xl">{money(totals.costMicros)}</p>
-        </div>
-        <div className="rounded-lg border border-line bg-surface p-4">
-          <p className="font-mono text-[11px] uppercase tracking-widest text-muted">毛利</p>
-          <p className={`mt-1 font-mono text-xl ${profitClass(totals.profitMicros)}`}>{money(totals.profitMicros)}</p>
-        </div>
-        <div className="rounded-lg border border-line bg-surface p-4">
-          <p className="font-mono text-[11px] uppercase tracking-widest text-muted">毛利率</p>
-          <p className={`mt-1 font-mono text-xl ${totals.profitMicros >= 0 ? "text-success" : "text-danger"}`}>{margin === null ? "—" : margin.toFixed(1) + "%"}</p>
-        </div>
-      </div>
+      <KpiRow cols={4}>
+        <Kpi label="收入" value={money(totals.revenueMicros)} />
+        <Kpi label="成本" value={money(totals.costMicros)} />
+        <Kpi label="毛利" value={money(totals.profitMicros)} success={totals.profitMicros >= 0} danger={totals.profitMicros < 0} />
+        <Kpi label="毛利率" value={margin === null ? "—" : margin.toFixed(1) + "%"} success={totals.profitMicros >= 0} danger={totals.profitMicros < 0} />
+      </KpiRow>
       <div className="mt-6 grid gap-8 xl:grid-cols-2 xl:items-start">
         <div>
-          <h2 className="mb-3 text-lg font-semibold">按模型</h2>
+          <SectHead title="按模型" />
           <div className="overflow-x-auto rounded-lg border border-line">
             <table className="w-full min-w-[34rem] border-collapse text-sm">
               <thead>
-                <tr className="border-b border-line bg-surface text-left font-mono text-xs text-muted">
+                <tr className="border-b border-rule text-left font-mono text-xs uppercase tracking-[0.06em] text-ink-2">
                   <th className="px-4 py-2.5 font-normal">模型</th>
                   <th className="px-4 py-2.5 text-right font-normal">调用</th>
                   <th className="px-4 py-2.5 text-right font-normal">Tokens</th>
@@ -161,11 +145,11 @@ export default async function ProfitPage({ searchParams }: { searchParams: Promi
           </div>
         </div>
         <div>
-          <h2 className="mb-3 text-lg font-semibold">按渠道</h2>
+          <SectHead title="按渠道" />
           <div className="overflow-x-auto rounded-lg border border-line">
             <table className="w-full min-w-[28rem] border-collapse text-sm">
               <thead>
-                <tr className="border-b border-line bg-surface text-left font-mono text-xs text-muted">
+                <tr className="border-b border-rule text-left font-mono text-xs uppercase tracking-[0.06em] text-ink-2">
                   <th className="px-4 py-2.5 font-normal">渠道</th>
                   <th className="px-4 py-2.5 text-right font-normal">调用</th>
                   <th className="px-4 py-2.5 text-right font-normal">收入</th>

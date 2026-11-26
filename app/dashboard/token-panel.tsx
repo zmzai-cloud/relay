@@ -108,57 +108,52 @@ export function TokenPanel({ initialKeys, models }: { initialKeys: Key[]; models
           </Button>
         </div>
       ) : (
-        <div className="space-y-4">
+<div className="divide-y divide-line rounded-lg border border-line">
           {keys.map((key) => (
             <div
               key={key._id}
-              className={`group relative rounded-xl border bg-bg p-5 transition-all duration-200 hover:border-line-strong hover:shadow-md ${
-                key.status === "active" ? "border-line" : "border-line/50 opacity-60"
+              className={`group relative flex flex-wrap items-center gap-4 px-5 py-4 transition-colors ${
+                key.status === "active" ? "" : "opacity-60"
               }`}
             >
-              <div className="flex items-start justify-between gap-6">
-                {/* Left: Key Info */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-3">
-                    <h3 className="truncate text-base font-semibold text-ink">{key.name}</h3>
-                    <Badge variant={key.status === "active" ? "success" : "outline"} size="sm">
-                      {key.status === "active" ? "启用" : "已吊销"}
-                    </Badge>
-                  </div>
-                  <div className="mt-3 font-mono text-sm text-muted">
-                    <code className="rounded-lg bg-surface px-2.5 py-1">{key.prefix}…</code>
-                  </div>
+              <div className="min-w-[220px] flex-1">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h3 className="text-[15px] font-semibold">{key.name}</h3>
+                  <Badge variant={key.status === "active" ? "success" : "outline"} size="sm">
+                    {key.status === "active" ? "启用" : "已吊销"}
+                  </Badge>
                 </div>
-
-                {/* Right: Meta + Actions */}
-                <div className="flex shrink-0 items-start gap-8 text-xs text-muted">
-                  <div className="space-y-1.5 text-right">
-                    <div className="font-mono text-sm font-medium">{key.rateLimitPerMinute}/min</div>
-                    <div className="text-xs">{formatDate(key.lastUsedAt)}</div>
-                  </div>
-
-                  {key.status === "active" && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => revoke(key._id)}
-                      disabled={revokingId === key._id}
-                      className="shrink-0 text-danger/70 opacity-0 transition-opacity group-hover:opacity-100 hover:text-danger"
-                    >
-                      {revokingId === key._id ? "吊销中…" : "吊销"}
-                    </Button>
-                  )}
+                <code className="mt-1.5 inline-block rounded-sm border border-line bg-surface px-2 py-0.5 font-mono text-xs text-ink-2">
+                  {key.prefix}…
+                </code>
+                {key.monthlySpendLimitMicros > 0 && (
+                  <p className="mt-1.5 text-xs text-ink-2">
+                    月限额 ¥{(key.monthlySpendLimitMicros / 1000000).toFixed(2)}
+                    {key.monthlySpendUsedMicros > 0 && ` · 已用 ¥${(key.monthlySpendUsedMicros / 1000000).toFixed(2)}`}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-x-7 gap-y-2 text-right">
+                <div>
+                  <p className="font-mono text-[13.5px] font-medium tabular-nums">{key.rateLimitPerMinute}/min</p>
+                  <p className="mt-0.5 text-[11px] text-ink-2">限速</p>
+                </div>
+                <div>
+                  <p className="text-[13.5px] text-ink-2">{formatDate(key.lastUsedAt)}</p>
+                  <p className="mt-0.5 text-[11px] text-ink-2">最近调用</p>
                 </div>
               </div>
-
-              {/* Spend hint (if restricted) */}
-              {key.monthlySpendLimitMicros > 0 && (
-                <div className="mt-4 border-t border-line pt-4 text-xs text-muted">
-                  月限额: ¥{(key.monthlySpendLimitMicros / 1000000).toFixed(2)}
-                  {key.monthlySpendUsedMicros > 0 &&
-                    ` · 已用: ¥{(key.monthlySpendUsedMicros / 1000000).toFixed(2)}`}
-                </div>
+              {key.status === "active" && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => revoke(key._id)}
+                  disabled={revokingId === key._id}
+                  className="shrink-0 text-danger/70 opacity-0 transition-opacity group-hover:opacity-100 hover:text-danger"
+                >
+                  {revokingId === key._id ? "吊销中…" : "吊销"}
+                </Button>
               )}
             </div>
           ))}

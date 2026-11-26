@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { PageHeader } from "@zmzai/theme";
+import { LedgerHead } from "@/components/ledger-ui";
 import { RelayShell } from "@/components/relay-shell";
 import { getCurrentUser } from "@/providers/auth/session";
 import { connectMongo } from "@/providers/database/mongodb/connection";
@@ -17,11 +17,10 @@ export default async function KeysPage() {
   const [keys, models] = await Promise.all([ApiKeyModel.find({ userId: user.id }).sort({ createdAt: -1 }).lean(), ModelPriceModel.find({ enabled: true }).sort({ model: 1 }).lean()]);
   return (
     <RelayShell role="user" userName={user.name} isAdminUser={user.role === "admin"}>
-      <PageHeader
-        icon="key"
+      <LedgerHead
         eyebrow="控制台"
         title="API Keys"
-        description="创建和管理调用凭证，Key 可随时吊销，可为每个 Key 设置模型范围与消费上限。"
+        description="创建和管理调用凭证。Key 可随时吊销，可为每个 Key 设置模型范围与消费上限。完整 Key 仅在创建时显示一次。"
       />
       <div className="mt-6">
         <TokenPanel

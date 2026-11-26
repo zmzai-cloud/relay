@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Badge, PageHeader } from "@zmzai/theme";
+import { Badge } from "@zmzai/theme";
+import { Kpi, KpiRow, LedgerHead, SectHead } from "@/components/ledger-ui";
 import { RelayShell } from "@/components/relay-shell";
 import { getCurrentUser } from "@/providers/auth/session";
 import { connectMongo } from "@/providers/database/mongodb/connection";
@@ -72,28 +73,19 @@ export default async function AdminPage() {
   ];
   return (
     <RelayShell role="admin" userName={user.name}>
-      <PageHeader
-        icon="gauge"
-        eyebrow="管理后台"
-        title="运营概览"
-        description="调用、毛利与渠道健康度总览；毛利 = 收入 − 上游成本（成本未配置的渠道不计入）。"
-      />
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <LedgerHead eyebrow="管理后台" title="运营概览" description="调用、毛利与渠道健康度总览；毛利 = 收入 − 上游成本（成本未配置的渠道不计入）。" />
+      <KpiRow cols={4}>
         {stats.map(([label, value, hint, danger]) => (
-          <div key={label} className="rounded-lg border border-line bg-bg p-5">
-            <p className="font-mono text-xs text-muted">{label}</p>
-            <p className={`mt-2 font-mono text-2xl ${danger === "danger" ? "text-danger" : ""}`}>{value}</p>
-            <p className="mt-1 text-xs text-muted">{hint}</p>
-          </div>
+          <Kpi key={label} label={label} value={value} hint={hint} danger={danger === "danger"} />
         ))}
-      </div>
+      </KpiRow>
       {blockedCount+pendingCount>0?<div role="status" className="mt-6 rounded-lg border border-danger/40 bg-danger/5 p-4 text-sm"><span className="font-medium text-danger">{blockedCount} 个渠道模型暂时停止路由，{pendingCount} 个等待重试确认。</span> 可在 <Link href="/admin/models" className="text-accent underline underline-offset-4">模型与价格</Link> 查看失败原因和下次尝试时间。</div>:null}
-      <h2 className="mt-10 text-lg font-semibold">渠道健康度</h2>
-      <p className="mt-1 text-xs text-muted">统计窗口为最近 24 小时；健康状态按渠道和模型分别记录，失败的模型不会暂停同渠道的其他模型。</p>
+      <div className="mt-10"><SectHead title="渠道健康度" /></div>
+      <p className="mt-3 text-xs text-ink-2">统计窗口为最近 24 小时；健康状态按渠道和模型分别记录，失败的模型不会暂停同渠道的其他模型。</p>
       <div className="mt-3 overflow-x-auto rounded-lg border border-line">
         <table className="w-full min-w-[52rem] border-collapse text-sm">
           <thead>
-            <tr className="border-b border-line bg-surface text-left font-mono text-xs text-muted">
+            <tr className="border-b border-rule text-left font-mono text-xs uppercase tracking-[0.06em] text-ink-2">
               <th className="px-4 py-2.5 font-normal">渠道</th>
               <th className="px-4 py-2.5 font-normal">状态</th>
               <th className="px-4 py-2.5 font-normal">优先级</th>

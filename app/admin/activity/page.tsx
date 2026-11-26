@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { Badge, PageHeader } from "@zmzai/theme";
+import { Badge } from "@zmzai/theme";
+import { LedgerHead } from "@/components/ledger-ui";
 import { RelayShell } from "@/components/relay-shell";
 import { getCurrentUser } from "@/providers/auth/session";
 import { connectMongo } from "@/providers/database/mongodb/connection";
@@ -67,16 +68,11 @@ export default async function ActivityPage() {
   }
   return (
     <RelayShell role="admin" userName={user.name}>
-      <PageHeader
-        icon="activity"
-        eyebrow="管理后台"
-        title="调用与账本"
-        description={
+      <LedgerHead eyebrow="管理后台" title="调用与账本" description={
           <>
             全站最近的调用、渠道尝试与余额流水。待核查上游成本：{uncertain} 笔。
           </>
-        }
-      />
+        } />
       {uncertain > 0 ? (
         <div className="mt-4 rounded-lg border border-line">
           <div className="border-b border-line bg-surface px-4 py-2.5">
@@ -85,7 +81,7 @@ export default async function ActivityPage() {
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="border-b border-line bg-surface text-left font-mono text-xs text-muted">
+                <tr className="border-b border-rule text-left font-mono text-xs uppercase tracking-[0.06em] text-ink-2">
                   <th className="px-4 py-2 font-normal">渠道</th>
                   <th className="px-4 py-2 font-normal">状态</th>
                   <th className="px-4 py-2 font-normal">上游模型</th>
@@ -127,7 +123,7 @@ export default async function ActivityPage() {
           <div className="overflow-x-auto rounded-lg border border-line">
             <table className="w-full min-w-[34rem] border-collapse text-sm">
               <thead>
-                <tr className="border-b border-line bg-surface text-left font-mono text-xs text-muted">
+                <tr className="border-b border-rule text-left font-mono text-xs uppercase tracking-[0.06em] text-ink-2">
                   <th className="px-4 py-2.5 font-normal">模型</th>
                   <th className="px-4 py-2.5 font-normal">状态</th>
                   <th className="px-4 py-2.5 text-right font-normal">Tokens</th>
@@ -164,7 +160,7 @@ export default async function ActivityPage() {
           <div className="overflow-x-auto rounded-lg border border-line">
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="border-b border-line bg-surface text-left font-mono text-xs text-muted">
+                <tr className="border-b border-rule text-left font-mono text-xs uppercase tracking-[0.06em] text-ink-2">
                   <th className="px-4 py-2.5 font-normal">类型</th>
                   <th className="px-4 py-2.5 text-right font-normal">金额</th>
                 </tr>

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { PageHeader } from "@zmzai/theme";
+import { LedgerHead } from "@/components/ledger-ui";
 
 import { RelayShell } from "@/components/relay-shell";
 import { getCurrentUser } from "@/providers/auth/session";
@@ -39,16 +39,11 @@ export default async function AdminKeysPage() {
 
   return (
     <RelayShell role="admin" userName={user.name}>
-      <PageHeader
-        icon="key"
-        eyebrow="管理后台"
-        title="全部 Token"
-        description={
+      <LedgerHead eyebrow="管理后台" title="全部 Token" description={
           <>
             给调用方分发独立 key，调用方使用 <code className="font-mono text-accent">Authorization: Bearer zrk_...</code> 调用。明文 key 只在创建时显示一次。
           </>
-        }
-      />
+        } />
       <div className="mt-8"><KeyAdminPanel initialKeys={safe} /></div>
     </RelayShell>
   );

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { PageHeader } from "@zmzai/theme";
+import { LedgerHead } from "@/components/ledger-ui";
 
 import { RelayShell } from "@/components/relay-shell";
 import { getCurrentUser } from "@/providers/auth/session";
@@ -48,12 +48,7 @@ export default async function AdminChannelsPage() {
 
   return (
     <RelayShell role="admin" userName={user.name}>
-      <PageHeader
-        icon="link"
-        eyebrow="管理后台"
-        title="渠道与路由"
-        description="Token 不绑定渠道；系统按模型映射、启用状态与优先级转发，失败时自动尝试下一个上游。"
-      />
+      <LedgerHead eyebrow="管理后台" title="渠道与路由" description="Token 不绑定渠道；系统按模型映射、启用状态与优先级转发，失败时自动尝试下一个上游。" />
       <div className="mt-8"><ChannelAdminPanel initialChannels={safe} /></div>
     </RelayShell>
   );

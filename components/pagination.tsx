@@ -4,19 +4,22 @@ export function Pagination({
   page,
   totalPages,
   basePath,
+  query = "",
 }: {
   page: number;
   totalPages: number;
   basePath: string;
+  /** 附加查询串（如 status 筛选），含前导 & 或空。 */
+  query?: string;
 }) {
   if (totalPages <= 1) return null;
-  const href = (p: number) => `${basePath}?page=${p}`;
+  const href = (p: number) => `${basePath}?page=${p}${query}`;
   const prevDisabled = page <= 1;
   const nextDisabled = page >= totalPages;
   return (
     <nav className="mt-6 flex items-center justify-center gap-3 text-sm">
       {prevDisabled ? (
-        <span className="rounded-lg border border-line px-3 py-1.5 text-muted/50">上一页</span>
+        <span className="rounded-md border border-line px-3 py-1.5 text-ink-3">上一页</span>
       ) : (
         <Link
           href={href(page - 1)}
