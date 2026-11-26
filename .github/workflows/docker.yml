@@ -26,8 +26,10 @@ jobs:
           ENABLE_ZMZAI_INTERNAL=false
           EOF
 
-      - name: Build & boot
-        run: docker compose up -d
+      # 必须 --build：compose 声明了 image:latest 后，裸 up 会在 runner 上直接拉
+      # 上一次 CI 的远端镜像，验的不是当前提交——门禁静默失效。
+      - name: Build & boot（强制用当前提交构建）
+        run: docker compose up -d --build
 
       - name: Wait for app health
         run: |
